@@ -125,6 +125,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [importType, setImportType] = useState('append');
+  const [exportType, setExportType] = useState('all');
 
   // --- WHATSAPP BİLDİRİM STATE'LERİ EKLENDİ ---
   const [telegramChatId, setTelegramChatId] = useState('');
@@ -341,7 +342,7 @@ function App() {
 
   const handleExport = async () => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/admin/reports/export`, {
+      const res = await fetch(`${BACKEND_URL}/api/admin/reports/export?type=${exportType}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Dışa aktarma başarısız oldu.");
@@ -351,7 +352,7 @@ function App() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `biuyari_yedek_${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `biuyari_yedek_${exportType}_${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -372,11 +373,11 @@ function App() {
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
-        const reportsData = JSON.parse(event.target.result);
+        const parsedData = JSON.parse(event.target.result);
         const res = await fetch(`${BACKEND_URL}/api/admin/reports/import`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ reports: reportsData, importType })
+          body: JSON.stringify({ data: parsedData, importType })
         });
 
         if (!res.ok) throw new Error("İçe aktarma işlemi başarısız.");
@@ -809,29 +810,52 @@ function App() {
             </div>
 
             <div style={{ padding: '20px' }}>
-              <h4 style={{ margin: '0 0 10px 0', color: '#374151', fontSize: '15px' }}>Veri Yedekleme ve Kurtarma</h4>
-              <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '20px', lineHeight: '1.4' }}>
-                Sistemdeki tüm ihbarları JSON dosyası olarak cihazınıza indirebilir veya daha önce indirdiğiniz bir yedeği sisteme geri yükleyebilirsiniz.
+              <h4 style={{ margin: '0 0 10px 0', color: '#374151', fontSize: '15px' }}>Veri Yedekleme (Dışa Aktar)</h4>
+              <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '15px', lineHeight: '1.4' }}>
+                Sistemden hangi verileri yedeklemek istediğinizi seçin. Seçtiğiniz verilere bağlı olan kullanıcı profilleri (WordPress mantığıyla) otomatik olarak dosyaya dahil edilecektir.
               </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '15px' }}>
+                <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                  <input type="radio" name="exportType" value="all" checked={exportType === 'all'} onChange={() => setExportType('all')} />
+                  Tüm Veritabanı (İhbarlar, Kullanıcılar, Bölgeler)
+                </label>
+                <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                  <input type="radio" name="exportType" value="reports" checked={exportType === 'reports'} onChange={() => setExportType('reports')} />
+                  Sadece İhbarlar ve Oylar
+                </label>
+                <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                  <input type="radio" name="exportType" value="zones" checked={exportType === 'zones'} onChange={() => setExportType('zones')} />
+                  Sadece Kayıtlı Bölgeler
+                </label>
+                <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                  <input type="radio" name="exportType" value="users" checked={exportType === 'users'} onChange={() => setExportType('users')} />
+                  Sadece Kullanıcı Listesi
+                </label>
+              </div>
 
               <button
                 onClick={handleExport}
-                style={{ width: '100%', padding: '14px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', marginBottom: '15px' }}
+                style={{ width: '100%', padding: '14px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', marginBottom: '25px' }}
               >
-                <Download size={18} /> Tüm İhbarları Dışa Aktar (Yedekle)
+                <Download size={18} /> Seçili Verileri İndir (Yedekle)
               </button>
 
               <div style={{ border: '1px dashed #cbd5e1', padding: '15px', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
                 <h5 style={{ margin: '0 0 10px 0', color: '#475569', fontSize: '14px' }}>📥 İçe Aktar (Geri Yükle)</h5>
 
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '15px' }}>
                   <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
                     <input type="radio" name="importType" value="append" checked={importType === 'append'} onChange={() => setImportType('append')} />
-                    Mevcut verilere ekle
+                    Mevcut verilere ekle (Yeni kayıt olarak)
+                  </label>
+                  <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                    <input type="radio" name="importType" value="update" checked={importType === 'update'} onChange={() => setImportType('update')} />
+                    Eşleşen kayıtları güncelle (Değişenleri yansıt)
                   </label>
                   <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
                     <input type="radio" name="importType" value="replace" checked={importType === 'replace'} onChange={() => setImportType('replace')} />
-                    Tümünü sil ve değiştir
+                    Tüm veritabanını sil ve dosyayla değiştir
                   </label>
                 </div>
 

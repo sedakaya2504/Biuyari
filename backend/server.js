@@ -327,32 +327,186 @@ app.post('/api/reports', verifyToken, upload.single('image'), async (req, res) =
 
 // --- YÖNETİCİ: DIŞA AKTAR ---
 app.get('/api/admin/reports/export', verifyToken, verifyAdmin, async (req, res) => {
+  const { type } = req.query; // 'all', 'reports', 'users', 'zones'
   try {
-    const result = await pool.query('SELECT * FROM reports ORDER BY created_at DESC');
-    res.json(result.rows);
+    const data = {};
+
+    if (type === 'users' || type === 'all') {
+      const usersRes = await pool.query('SELECT * FROM users ORDER BY id ASC');
+      data.users = usersRes.rows;
+    }
+
+    if (type === 'zones' || type === 'all') {
+      const zonesRes = await pool.query('SELECT * FROM saved_zones ORDER BY id ASC');
+      data.saved_zones = zonesRes.rows;
+      
+      if (type === 'zones') {
+        const userIds = [...new Set(zonesRes.rows.map(z => z.user_id))];
+        if (userIds.length > 0) {
+          const usersRes = await pool.query('SELECT * FROM users WHERE id = ANY($1::int[])', [userIds]);
+          data.users = usersRes.rows;
+        }
+      }
+    }
+
+    if (type === 'reports' || type === 'all') {
+      const reportsRes = await pool.query('SELECT * FROM reports ORDER BY id ASC');
+      data.reports = reportsRes.rows;
+      
+      const reportIds = reportsRes.rows.map(r => r.id);
+      if (reportIds.length > 0) {
+        const votesRes = await pool.query('SELECT * FROM report_votes WHERE report_id = ANY($1::int[])', [reportIds]);
+        data.report_votes = votesRes.rows;
+      }
+      
+      if (type === 'reports') {
+        const userIds = new Set();
+        reportsRes.rows.forEach(r => userIds.add(r.user_id));
+        if (data.report_votes) data.report_votes.forEach(v => userIds.add(v.user_id));
+        
+        if (userIds.size > 0) {
+          const usersRes = await pool.query('SELECT * FROM users WHERE id = ANY($1::int[])', [Array.from(userIds)]);
+          data.users = usersRes.rows;
+        }
+      }
+    }
+
+    res.json(data);
   } catch (err) {
+    console.error("Dışa aktarma hatası:", err);
     res.status(500).send("Dışa aktarma başarısız oldu.");
   }
 });
 
 // --- YÖNETİCİ: İÇE AKTAR ---
 app.post('/api/admin/reports/import', verifyToken, verifyAdmin, async (req, res) => {
-  const { reports, importType } = req.body;
-  if (!Array.isArray(reports)) return res.status(400).send("Geçersiz veri formatı.");
+  const { data, importType } = req.body;
+  if (!data || typeof data !== 'object') return res.status(400).send("Geçersiz veri formatı.");
 
   try {
     await pool.query('BEGIN'); 
 
     if (importType === 'replace') {
+      await pool.query('DELETE FROM report_votes'); 
       await pool.query('DELETE FROM reports'); 
+      await pool.query('DELETE FROM saved_zones'); 
+      await pool.query('DELETE FROM users'); 
     }
 
-    for (const r of reports) {
-      await pool.query(
-        `INSERT INTO reports (user_id, lat, lng, type_label, note, image_url, severity, up_votes, down_votes, created_at, geom)
-         VALUES ($1, $2::float, $3::float, $4, $5, $6, $7, $8, $9, $10, ST_SetSRID(ST_MakePoint($3::float, $2::float), 4326)::geography)`,
-        [r.user_id, r.lat, r.lng, r.type_label, r.note, r.image_url, r.severity || 'Orta', r.up_votes || 0, r.down_votes || 0, r.created_at || new Date()]
-      );
+    const userMap = {}; 
+    const reportMap = {}; 
+
+    if (data.users && Array.isArray(data.users)) {
+      for (const u of data.users) {
+        if (importType === 'replace') {
+           await pool.query(
+             `INSERT INTO users (id, google_id, full_name, email, phone_number, telegram_chat_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+             [u.id, u.google_id, u.full_name, u.email, u.phone_number, u.telegram_chat_id, u.created_at || new Date()]
+           );
+           userMap[u.id] = u.id;
+        } else if (importType === 'update') {
+           await pool.query(
+             `INSERT INTO users (id, google_id, full_name, email, phone_number, telegram_chat_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)
+              ON CONFLICT (id) DO UPDATE SET google_id = EXCLUDED.google_id, full_name = EXCLUDED.full_name, email = EXCLUDED.email, phone_number = EXCLUDED.phone_number, telegram_chat_id = EXCLUDED.telegram_chat_id`,
+             [u.id, u.google_id, u.full_name, u.email, u.phone_number, u.telegram_chat_id, u.created_at || new Date()]
+           );
+           userMap[u.id] = u.id;
+        } else {
+           const existing = await pool.query('SELECT id FROM users WHERE google_id = $1', [u.google_id]);
+           if (existing.rows.length > 0) {
+             userMap[u.id] = existing.rows[0].id;
+           } else {
+             const result = await pool.query(
+               `INSERT INTO users (google_id, full_name, email, phone_number, telegram_chat_id, created_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+               [u.google_id, u.full_name, u.email, u.phone_number, u.telegram_chat_id, u.created_at || new Date()]
+             );
+             userMap[u.id] = result.rows[0].id;
+           }
+        }
+      }
+      if (importType === 'replace' || importType === 'update') await pool.query("SELECT setval('users_id_seq', COALESCE((SELECT MAX(id)+1 FROM users), 1), false)");
+    }
+
+    if (data.saved_zones && Array.isArray(data.saved_zones)) {
+      for (const z of data.saved_zones) {
+        const uId = userMap[z.user_id] || z.user_id; 
+        if (importType === 'replace') {
+          await pool.query(
+            `INSERT INTO saved_zones (id, user_id, telegram_chat_id, whatsapp_number, notification_pref, priorities, lat, lng, radar_radius, geom, created_at) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7::float, $8::float, $9, ST_SetSRID(ST_MakePoint($8::float, $7::float), 4326)::geography, $10)`,
+            [z.id, uId, z.telegram_chat_id, z.whatsapp_number, z.notification_pref, z.priorities ? JSON.stringify(z.priorities) : null, z.lat, z.lng, z.radar_radius, z.created_at || new Date()]
+          );
+        } else if (importType === 'update') {
+          await pool.query(
+            `INSERT INTO saved_zones (id, user_id, telegram_chat_id, whatsapp_number, notification_pref, priorities, lat, lng, radar_radius, geom, created_at) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7::float, $8::float, $9, ST_SetSRID(ST_MakePoint($8::float, $7::float), 4326)::geography, $10)
+             ON CONFLICT (id) DO UPDATE SET user_id = EXCLUDED.user_id, telegram_chat_id = EXCLUDED.telegram_chat_id, whatsapp_number = EXCLUDED.whatsapp_number, notification_pref = EXCLUDED.notification_pref, priorities = EXCLUDED.priorities, lat = EXCLUDED.lat, lng = EXCLUDED.lng, radar_radius = EXCLUDED.radar_radius, geom = EXCLUDED.geom`,
+            [z.id, uId, z.telegram_chat_id, z.whatsapp_number, z.notification_pref, z.priorities ? JSON.stringify(z.priorities) : null, z.lat, z.lng, z.radar_radius, z.created_at || new Date()]
+          );
+        } else {
+          await pool.query(
+            `INSERT INTO saved_zones (user_id, telegram_chat_id, whatsapp_number, notification_pref, priorities, lat, lng, radar_radius, geom, created_at) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7::float, $8::float, $9, ST_SetSRID(ST_MakePoint($8::float, $7::float), 4326)::geography, $10)`,
+            [uId, z.telegram_chat_id, z.whatsapp_number, z.notification_pref, z.priorities ? JSON.stringify(z.priorities) : null, z.lat, z.lng, z.radar_radius, z.created_at || new Date()]
+          );
+        }
+      }
+      if (importType === 'replace' || importType === 'update') await pool.query("SELECT setval('saved_zones_id_seq', COALESCE((SELECT MAX(id)+1 FROM saved_zones), 1), false)");
+    }
+
+    if (data.reports && Array.isArray(data.reports)) {
+      for (const r of data.reports) {
+        const uId = userMap[r.user_id] || r.user_id;
+        if (importType === 'replace') {
+           await pool.query(
+             `INSERT INTO reports (id, user_id, lat, lng, type_label, note, image_url, severity, up_votes, down_votes, created_at, geom) 
+              VALUES ($1, $2, $3::float, $4::float, $5, $6, $7, $8, $9, $10, $11, ST_SetSRID(ST_MakePoint($4::float, $3::float), 4326)::geography)`,
+             [r.id, uId, r.lat, r.lng, r.type_label, r.note, r.image_url, r.severity || 'Orta', r.up_votes || 0, r.down_votes || 0, r.created_at || new Date()]
+           );
+           reportMap[r.id] = r.id;
+        } else if (importType === 'update') {
+           await pool.query(
+             `INSERT INTO reports (id, user_id, lat, lng, type_label, note, image_url, severity, up_votes, down_votes, created_at, geom) 
+              VALUES ($1, $2, $3::float, $4::float, $5, $6, $7, $8, $9, $10, $11, ST_SetSRID(ST_MakePoint($4::float, $3::float), 4326)::geography)
+              ON CONFLICT (id) DO UPDATE SET user_id = EXCLUDED.user_id, lat = EXCLUDED.lat, lng = EXCLUDED.lng, type_label = EXCLUDED.type_label, note = EXCLUDED.note, image_url = EXCLUDED.image_url, severity = EXCLUDED.severity, up_votes = EXCLUDED.up_votes, down_votes = EXCLUDED.down_votes, geom = EXCLUDED.geom`,
+             [r.id, uId, r.lat, r.lng, r.type_label, r.note, r.image_url, r.severity || 'Orta', r.up_votes || 0, r.down_votes || 0, r.created_at || new Date()]
+           );
+           reportMap[r.id] = r.id;
+        } else {
+           const result = await pool.query(
+             `INSERT INTO reports (user_id, lat, lng, type_label, note, image_url, severity, up_votes, down_votes, created_at, geom) 
+              VALUES ($1, $2::float, $3::float, $4, $5, $6, $7, $8, $9, $10, ST_SetSRID(ST_MakePoint($3::float, $2::float), 4326)::geography) RETURNING id`,
+             [uId, r.lat, r.lng, r.type_label, r.note, r.image_url, r.severity || 'Orta', r.up_votes || 0, r.down_votes || 0, r.created_at || new Date()]
+           );
+           reportMap[r.id] = result.rows[0].id;
+        }
+      }
+      if (importType === 'replace' || importType === 'update') await pool.query("SELECT setval('reports_id_seq', COALESCE((SELECT MAX(id)+1 FROM reports), 1), false)");
+    }
+
+    if (data.report_votes && Array.isArray(data.report_votes)) {
+      for (const v of data.report_votes) {
+        const uId = userMap[v.user_id] || v.user_id;
+        const rId = reportMap[v.report_id] || v.report_id;
+        if (importType === 'replace') {
+          await pool.query(
+            `INSERT INTO report_votes (id, report_id, user_id, vote_type, created_at) VALUES ($1, $2, $3, $4, $5)`,
+            [v.id, rId, uId, v.vote_type, v.created_at || new Date()]
+          );
+        } else if (importType === 'update') {
+          await pool.query(
+            `INSERT INTO report_votes (id, report_id, user_id, vote_type, created_at) VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (id) DO UPDATE SET report_id = EXCLUDED.report_id, user_id = EXCLUDED.user_id, vote_type = EXCLUDED.vote_type`,
+            [v.id, rId, uId, v.vote_type, v.created_at || new Date()]
+          );
+        } else {
+          await pool.query(
+            `INSERT INTO report_votes (report_id, user_id, vote_type, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+            [rId, uId, v.vote_type, v.created_at || new Date()]
+          );
+        }
+      }
+      if (importType === 'replace' || importType === 'update') await pool.query("SELECT setval('report_votes_id_seq', COALESCE((SELECT MAX(id)+1 FROM report_votes), 1), false)");
     }
 
     await pool.query('COMMIT');
