@@ -1,0 +1,305 @@
+/* GENEL AYARLAR VE MOBİL SIFIRLAMA */
+body, html, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  overflow: hidden; /* Sayfa kaydırılmasın, harita tam ekran kalsın */
+  -webkit-tap-highlight-color: transparent; /* Mobilde dokunma mavisini engeller */
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  /* KİRİT NOKTA: 100vh yerine 100dvh (Telefon adres çubuğu açılıp kapandığında butonların dışarı kaçmasını engeller) */
+  height: 100dvh; 
+  background-color: #f8fafc;
+  width: 100vw;
+  overflow-x: hidden; /* Sağa sola kaymayı engeller */
+}
+
+/* HEADER (ÜST MENÜ) */
+.header {
+  background-color: #ffffff;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  z-index: 1000;
+  flex-shrink: 0; /* Üst menü asla ezilmez */
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header h1 svg {
+  color: #ef4444; /* Kırmızı alarm ikonu */
+}
+
+.header-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+/* BUTONLARIN GENEL STİLİ */
+.btn-icon, .btn-locate {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.btn-icon { background-color: #ffffff; color: #4b5563; }
+.btn-icon.active { background-color: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+.btn-icon:hover { background-color: #f1f5f9; }
+
+.btn-locate { background-color: #1e293b; color: #ffffff; border: none; }
+.btn-locate:hover { background-color: #0f172a; }
+
+/* FİLTRE ÇUBUĞU (Yana Kaydırılabilir Mobil Çözüm) */
+.filter-bar {
+  background-color: #ffffff;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 14px;
+  flex-shrink: 0;
+  /* Küçük ekranlarda yana doğru kaydırma sağlar */
+  overflow-x: auto; 
+  white-space: nowrap;
+}
+
+/* Mobilde çirkin kaydırma çubuğunu gizler */
+.filter-bar::-webkit-scrollbar {
+  display: none; 
+}
+
+.filter-bar button {
+  background: none;
+  border: 1px solid transparent;
+  padding: 4px 10px;
+  border-radius: 6px;
+  color: #4b5563;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.filter-bar button.active {
+  background-color: #f1f5f9;
+  color: #1e293b;
+  font-weight: 600;
+}
+
+/* HARİTA ALANI (TAM EKRAN OLMASI İÇİN) */
+.map-wrapper {
+  flex-grow: 1; /* Geri kalan tüm alanı kapla - Kilit Nokta */
+  position: relative;
+  z-index: 1;
+  min-height: 0; /* Flexbox daralma hatasını çözer */
+  width: 100%;
+}
+
+.map {
+  width: 100%;
+  height: 100%;
+}
+
+/* HARİTA İPUCU (YARDIMCI YAZI) */
+/* HARİTA İPUCU (YARDIMCI YAZI) */
+.map-hint {
+  background-color: #ef4444 !important;
+  color: white;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  margin: 0 15px 10px 15px; /* Sağdan, soldan ve alttan boşluk */
+  z-index: 10;
+  box-shadow: 0 4px 6px rgba(239, 68, 68, 0.2);
+}
+
+/* DİKKAT BANNERI (5KM YAKIN TEHLİKE) */
+.danger-banner {
+  background-color: #ef4444;
+  color: white;
+  padding: 10px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 14px;
+  z-index: 1100;
+}
+
+/* EKLEME FORMLARI (AŞAĞIDAN YUKARI AÇILAN - KAYDIRILABİLİR) */
+.report-form {
+  background-color: #ffffff;
+  padding: 20px;
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  border-top: 4px solid #ef4444;
+  box-shadow: 0 -5px 20px rgba(0,0,0,0.1);
+  z-index: 2000;
+  flex-shrink: 0;
+  
+  /* Mobilde haritayı yememesi ve kendi içinde kayması için */
+  max-height: 60dvh; 
+  overflow-y: auto; 
+  -webkit-overflow-scrolling: touch; /* iPhone'da yumuşak kaydırma */
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.report-form h3 { margin: 0 0 15px 0; color: #1e293b; }
+
+/* KİLİT NOKTA: iOS Zoom Koruması */
+.report-form select, .report-form textarea, .report-form input {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-family: inherit;
+  /* iOS cihazların form alanlarına tıklayınca zoom yapmasını engeller */
+  font-size: 16px !important; 
+  box-sizing: border-box; /* Padding taşmasını engeller */
+}
+
+.report-form textarea { resize: none; height: 80px; }
+
+.file-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #3b82f6;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  margin-bottom: 15px;
+}
+
+.btn-submit {
+  width: 100%;
+  padding: 12px;
+  background-color: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-submit:hover { opacity: 0.9; }
+
+/* ALT BUTON GRUBU KONTEYNERI (Kritik Alan) */
+.button-group-container {
+  display: flex;
+  gap: 10px;
+  padding: 15px;
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  background-color: #f8fafc; 
+  border-top: 1px solid #e2e8f0;
+  z-index: 1500;
+  flex-shrink: 0; /* Asla ezilmez, hep ekranda kalır */
+}
+
+/* ANA EKLEME BUTONLARI (Tehlike Bildir & Bölgemi Koru) */
+.btn-add-report {
+  flex: 1; /* Yan yana eşit alan kaplasınlar */
+  padding: 14px;
+  background-color: #ef4444; /* Tehlike bildir varsayılan */
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  transition: transform 0.1s;
+}
+
+.btn-add-report:active { transform: scale(0.97); }
+
+/* HARİTA İKONLARI VE ANİMASYONLAR */
+.user-dot {
+  width: 14px; height: 14px;
+  background-color: #3b82f6;
+  border: 3px solid white;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+}
+
+.hazard-container { position: relative; width: 45px; height: 45px; }
+.hazard-pulse {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  border-radius: 50%; opacity: 0.8;
+  animation: pulse 2s infinite ease-out;
+}
+.hazard-icon {
+  position: absolute; top: 5px; left: 5px; width: 35px; height: 35px;
+  border-radius: 50%; border: 3px solid white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  z-index: 2;
+}
+.hazard-badge {
+  position: absolute; top: -5px; right: -5px;
+  background-color: white; color: #b91c1c;
+  width: 20px; height: 20px;
+  border-radius: 50%; border: 2px solid #dc2626;
+  font-size: 12px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 3;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.5); opacity: 0.8; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+.animate-pulse { animation: danger-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+@keyframes danger-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .7; } }
+
+/* MOBİL ÖZEL AYARLAR (Yazıları gizleyip ikonları tutma) */
+@media (max-width: 600px) {
+  .header h1 {
+    font-size: 1.2rem;
+  }
+  
+  .btn-icon, .btn-locate {
+    padding: 8px 12px;
+  }
+  
+  .hide-on-mobile {
+    display: none;
+  }
+}
