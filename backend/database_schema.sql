@@ -174,7 +174,8 @@ CREATE TABLE public.users (
     created_at timestamp without time zone DEFAULT now(),
     trust_score integer DEFAULT 50,
     phone_number character varying(20),
-    telegram_chat_id character varying(50)
+    telegram_chat_id character varying(50),
+    username character varying(50)
 );
 
 

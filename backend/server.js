@@ -142,7 +142,7 @@ app.use('/api/auth', authRoutes);
 
 app.get('/api/auth/profile', verifyToken, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, full_name, email, phone_number, telegram_chat_id FROM users WHERE google_id = $1', [String(req.user.id)]);
+    const result = await pool.query('SELECT id, full_name, email, phone_number, telegram_chat_id, username FROM users WHERE google_id = $1', [String(req.user.id)]);
     if (result.rows.length === 0) return res.status(404).json({ message: "Kullanıcı bulunamadı" });
 
     const user = result.rows[0];
@@ -157,11 +157,11 @@ app.get('/api/auth/profile', verifyToken, async (req, res) => {
 
 // PROFİL GÜNCELLEME (Kayıt Tamamlama)
 app.put('/api/auth/profile', verifyToken, async (req, res) => {
-  const { full_name, phone_number, telegram_chat_id } = req.body;
+  const { full_name, phone_number, telegram_chat_id, username } = req.body;
   try {
     const result = await pool.query(
-      'UPDATE users SET full_name = $1, phone_number = $2, telegram_chat_id = $3 WHERE google_id = $4 RETURNING id, full_name, email, phone_number, telegram_chat_id',
-      [full_name, phone_number, telegram_chat_id, String(req.user.id)]
+      'UPDATE users SET full_name = $1, phone_number = $2, telegram_chat_id = $3, username = $4 WHERE google_id = $5 RETURNING id, full_name, email, phone_number, telegram_chat_id, username',
+      [full_name, phone_number, telegram_chat_id, username, String(req.user.id)]
     );
     if (result.rows.length === 0) return res.status(404).json({ message: "Kullanıcı bulunamadı" });
 
@@ -573,6 +573,8 @@ app.post('/api/reports/:id/vote', verifyToken, async (req, res) => {
     res.status(500).json({ message: "Oylama işlemi sırasında sunucu hatası oluştu." });
   }
 });
+
+
 
 server.listen(3000, () => {
   console.log('🚀 PostGIS + Çok Kanallı (WhatsApp/Telegram/Gmail) + Admin destekli sunucu hatasız çalışıyor!');

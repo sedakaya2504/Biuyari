@@ -303,3 +303,17 @@ body, html, #root {
     display: none;
   }
 }
+
+/* AI CHAT TYPING ANIMATION */
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  background-color: #9ca3af;
+  border-radius: 50%;
+  animation: typing 1.4s infinite ease-in-out both;
+}
+
+@keyframes typing {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}

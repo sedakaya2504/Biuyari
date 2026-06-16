@@ -179,10 +179,14 @@ function App() {
   const [regFullName, setRegFullName] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regTelegram, setRegTelegram] = useState('');
+  const [regUsername, setRegUsername] = useState('');
 
   useEffect(() => {
-    if (currentUser && currentUser.full_name) {
-      setRegFullName(currentUser.full_name);
+    if (currentUser) {
+      if (currentUser.full_name) setRegFullName(currentUser.full_name);
+      if (currentUser.username) setRegUsername(currentUser.username);
+      if (currentUser.phone_number) setRegPhone(currentUser.phone_number);
+      if (currentUser.telegram_chat_id) setRegTelegram(currentUser.telegram_chat_id);
     }
   }, [currentUser]);
 
@@ -441,14 +445,14 @@ function App() {
     );
   }
 
-  if (currentUser && !currentUser.phone_number) {
+  if (currentUser && (!currentUser.phone_number || !currentUser.username)) {
     const handleProfileSubmit = async (e) => {
       e.preventDefault();
       try {
         const res = await fetch(`${BACKEND_URL}/api/auth/profile`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ full_name: regFullName, phone_number: regPhone, telegram_chat_id: regTelegram })
+          body: JSON.stringify({ full_name: regFullName, phone_number: regPhone, telegram_chat_id: regTelegram, username: regUsername })
         });
         if (res.ok) {
           const updatedUser = await res.json();
@@ -471,6 +475,9 @@ function App() {
           <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#4b5563', fontWeight: 'bold' }}>Tam Adınız</label>
           <input type="text" value={regFullName} onChange={e => setRegFullName(e.target.value)} required style={{ width: '100%', padding: '10px', marginBottom: '15px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
 
+          <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#4b5563', fontWeight: 'bold' }}>Kullanıcı Adı</label>
+          <input type="text" value={regUsername} onChange={e => setRegUsername(e.target.value)} required placeholder="Örn: ahmet123" style={{ width: '100%', padding: '10px', marginBottom: '15px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+
           <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#4b5563', fontWeight: 'bold' }}>Telefon Numaranız</label>
           <input type="tel" value={regPhone} onChange={e => setRegPhone(e.target.value)} required placeholder="Örn: 0555 123 45 67" style={{ width: '100%', padding: '10px', marginBottom: '15px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
 
@@ -490,7 +497,7 @@ function App() {
         <div className="header-buttons">
           {currentUser && (
             <span style={{ marginRight: '10px', padding: '5px 10px', borderRadius: '15px', backgroundColor: currentUser.role === 'admin' ? '#fef08a' : '#e0e7ff', color: currentUser.role === 'admin' ? '#854d0e' : '#3730a3', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
-              {currentUser.role === 'admin' ? '👑 Yönetici' : '👤 Kullanıcı'}
+              {currentUser.role === 'admin' ? `👑 ${currentUser.username || 'Yönetici'}` : `👤 ${currentUser.username || 'Kullanıcı'}`}
             </span>
           )}
           {currentUser && currentUser.role === 'admin' && (
@@ -885,6 +892,7 @@ function App() {
           <button type="submit" className="btn-submit"><Send size={18} /> Gönder</button>
         </form>
       )}
+
     </div>
   );
 }
