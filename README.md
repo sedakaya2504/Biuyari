@@ -47,6 +47,7 @@ GOOGLE_CLIENT_SECRET=google_client_secret
 BACKEND_URL=http://localhost:3000
 FRONTEND_URL=http://localhost:5173
 ADMIN_EMAILS=sizin_email_adresiniz
+GEMINI_API_KEY=sizin_gemini_api_anahtariniz
 ```
 
 **`frontend/.env` dosyası:**
@@ -84,7 +85,12 @@ Bu projeyi tam özellikli çalıştırabilmek için aşağıdaki servislerden AP
 - **Authorized redirect URIs** kısmına `http://localhost:3000/api/auth/google/callback` ekleyin.
 - Size verilen Client ID ve Client Secret bilgilerini `.env` dosyanıza kopyalayın.
 
-**6. JWT Secret ve Admin:**
+**6. Gemini API (GEMINI_API_KEY):**
+- [Google AI Studio](https://aistudio.google.com/app/apikey) adresine gidin.
+- Google hesabınızla giriş yaptıktan sonra **"Create API key"** (API anahtarı oluştur) butonuna tıklayın.
+- Verilen anahtarı kopyalayıp `.env` dosyanızdaki `GEMINI_API_KEY` değişkeninin karşısına yapıştırın.
+
+**7. JWT Secret ve Admin:**
 - **JWT_SECRET:** Güvenlik için karmaşık bir şifreleme anahtarı gereklidir. Terminal veya komut isteminde şu komutu çalıştırarak rastgele ve çok güvenli bir kod oluşturup `.env` dosyanıza yapıştırabilirsiniz:
   `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`
 - **ADMIN_EMAILS:** Yönetici paneline (verileri dışa/içe aktarma vs.) erişecek olan kendi e-posta adresinizi yazın.
