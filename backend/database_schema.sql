@@ -1,11 +1,4 @@
---
--- PostgreSQL database dump
---
 
-\restrict XPz5Pno8cnA58AoHPJ2fCnUzJVYEDaBAy9H6XGFhq48IJqcLvZ90HfS7QiFteh9
-
--- Dumped from database version 18.3
--- Dumped by pg_dump version 18.3
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -333,9 +326,7 @@ ALTER TABLE ONLY public.report_votes
     ADD CONSTRAINT report_votes_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
 
---
--- PostgreSQL database dump complete
---
 
-\unrestrict XPz5Pno8cnA58AoHPJ2fCnUzJVYEDaBAy9H6XGFhq48IJqcLvZ90HfS7QiFteh9
+
+
 
