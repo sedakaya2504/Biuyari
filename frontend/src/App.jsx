@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap, Circle } from 'react-le
 import { io } from 'socket.io-client';
 import { AlertTriangle, MapPin, Camera, Send, Clock, Flame, Shield, LogOut, ArrowUp, ArrowDown, Settings, X, Plus, Download, Upload } from 'lucide-react';
 import L from 'leaflet';
+import Chatbot from './components/Chatbot';
 import './App.css';
 
 const hazardEmojis = {
@@ -893,6 +894,7 @@ function App() {
         </form>
       )}
 
+      <Chatbot />
     </div>
   );
 }

@@ -2,7 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict XPz5Pno8cnA58AoHPJ2fCnUzJVYEDaBAy9H6XGFhq48IJqcLvZ90HfS7QiFteh9
 
 -- Dumped from database version 18.3
 -- Dumped by pg_dump version 18.3
@@ -337,5 +336,4 @@ ALTER TABLE ONLY public.report_votes
 -- PostgreSQL database dump complete
 --
 
-\unrestrict XPz5Pno8cnA58AoHPJ2fCnUzJVYEDaBAy9H6XGFhq48IJqcLvZ90HfS7QiFteh9
 

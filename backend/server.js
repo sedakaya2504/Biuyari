@@ -7,6 +7,10 @@ const path = require('path');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
+const { GoogleGenAI } = require('@google/genai');
+
+// --- GEMINI YAPAY ZEKA BAĞLANTISI ---
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // --- MAİL GÖNDERİMİ İÇİN NODEMAILER ---
 const nodemailer = require('nodemailer');
@@ -130,7 +134,7 @@ app.get('/api/zones/me', verifyToken, async (req, res) => {
       'SELECT telegram_chat_id AS "telegramChatId", whatsapp_number AS "whatsappNumber", notification_pref AS "notificationPref", priorities, radar_radius AS "radius" FROM saved_zones WHERE user_id = $1 ORDER BY id DESC LIMIT 1',
       [dbUserId]
     );
-    
+
     if (result.rows.length === 0) return res.json(null);
     res.json(result.rows[0]);
   } catch (err) {
@@ -190,7 +194,7 @@ app.get('/api/reports', async (req, res) => {
 
 // --- YENİ BİLDİRİM EKLE VE RADARI ÇALIŞTIR ---
 app.post('/api/reports', verifyToken, upload.single('image'), async (req, res) => {
-  const { typeLabel, note, severity } = req.body; 
+  const { typeLabel, note, severity } = req.body;
   const imageUrl = req.file ? `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}` : null;
 
   const numLat = parseFloat(req.body.lat);
@@ -240,12 +244,12 @@ app.post('/api/reports', verifyToken, upload.single('image'), async (req, res) =
         // DÜZELTME: forEach yerine for...of kullanıldı (Bekleme yapabilmek için)
         for (const zone of zonesResult.rows) {
           const pref = zone.notification_pref || 'telegram';
-          const allowedHazards = zone.priorities; 
+          const allowedHazards = zone.priorities;
 
           // 🚨 FİLTRE KONTROLÜ: Çoban bu tehlikeyi listesinden çıkardıysa mesaj atma, diğer kişiye geç
           if (allowedHazards && allowedHazards.length > 0 && !allowedHazards.includes(typeLabel)) {
             console.log(`📌 Pas geçildi: ${zone.full_name} (${typeLabel} ayarlarında kapalı)`);
-            continue; 
+            continue;
           }
 
           const messageText = `🚨 *BiUyarı:* Güvenlik çemberinizde bir tehlike (*${typeLabel}*) bildirildi!\n\n🔴 *Önem Derecesi:* ${severity || 'Orta'}\n📍 *Mesafe:* Konumunuza **${zone.distance_km} KM** uzaklıkta!\n⚙️ *Sizin Radar Sınırınız:* ${zone.radar_radius} KM\n\n📝 *Not:* ${note || 'Belirtilmemiş'}\n\nLütfen sürünüzü kontrol edin!`;
@@ -266,7 +270,7 @@ app.post('/api/reports', verifyToken, upload.single('image'), async (req, res) =
           // 2. WHATSAPP GÖNDERİMİ
           if ((pref === 'whatsapp' || pref === 'both') && zone.whatsapp_number) {
             let formattedNumber = zone.whatsapp_number.startsWith('+') ? zone.whatsapp_number : `+90${zone.whatsapp_number.replace(/^0+/, '')}`;
-            
+
             twilioClient.messages.create({
               body: messageText,
               from: TWILIO_WHATSAPP_NUMBER,
@@ -339,7 +343,7 @@ app.get('/api/admin/reports/export', verifyToken, verifyAdmin, async (req, res) 
     if (type === 'zones' || type === 'all') {
       const zonesRes = await pool.query('SELECT * FROM saved_zones ORDER BY id ASC');
       data.saved_zones = zonesRes.rows;
-      
+
       if (type === 'zones') {
         const userIds = [...new Set(zonesRes.rows.map(z => z.user_id))];
         if (userIds.length > 0) {
@@ -352,18 +356,18 @@ app.get('/api/admin/reports/export', verifyToken, verifyAdmin, async (req, res) 
     if (type === 'reports' || type === 'all') {
       const reportsRes = await pool.query('SELECT * FROM reports ORDER BY id ASC');
       data.reports = reportsRes.rows;
-      
+
       const reportIds = reportsRes.rows.map(r => r.id);
       if (reportIds.length > 0) {
         const votesRes = await pool.query('SELECT * FROM report_votes WHERE report_id = ANY($1::int[])', [reportIds]);
         data.report_votes = votesRes.rows;
       }
-      
+
       if (type === 'reports') {
         const userIds = new Set();
         reportsRes.rows.forEach(r => userIds.add(r.user_id));
         if (data.report_votes) data.report_votes.forEach(v => userIds.add(v.user_id));
-        
+
         if (userIds.size > 0) {
           const usersRes = await pool.query('SELECT * FROM users WHERE id = ANY($1::int[])', [Array.from(userIds)]);
           data.users = usersRes.rows;
@@ -384,44 +388,44 @@ app.post('/api/admin/reports/import', verifyToken, verifyAdmin, async (req, res)
   if (!data || typeof data !== 'object') return res.status(400).send("Geçersiz veri formatı.");
 
   try {
-    await pool.query('BEGIN'); 
+    await pool.query('BEGIN');
 
     if (importType === 'replace') {
-      await pool.query('DELETE FROM report_votes'); 
-      await pool.query('DELETE FROM reports'); 
-      await pool.query('DELETE FROM saved_zones'); 
-      await pool.query('DELETE FROM users'); 
+      await pool.query('DELETE FROM report_votes');
+      await pool.query('DELETE FROM reports');
+      await pool.query('DELETE FROM saved_zones');
+      await pool.query('DELETE FROM users');
     }
 
-    const userMap = {}; 
-    const reportMap = {}; 
+    const userMap = {};
+    const reportMap = {};
 
     if (data.users && Array.isArray(data.users)) {
       for (const u of data.users) {
         if (importType === 'replace') {
-           await pool.query(
-             `INSERT INTO users (id, google_id, full_name, email, phone_number, telegram_chat_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-             [u.id, u.google_id, u.full_name, u.email, u.phone_number, u.telegram_chat_id, u.created_at || new Date()]
-           );
-           userMap[u.id] = u.id;
+          await pool.query(
+            `INSERT INTO users (id, google_id, full_name, email, phone_number, telegram_chat_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [u.id, u.google_id, u.full_name, u.email, u.phone_number, u.telegram_chat_id, u.created_at || new Date()]
+          );
+          userMap[u.id] = u.id;
         } else if (importType === 'update') {
-           await pool.query(
-             `INSERT INTO users (id, google_id, full_name, email, phone_number, telegram_chat_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          await pool.query(
+            `INSERT INTO users (id, google_id, full_name, email, phone_number, telegram_chat_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)
               ON CONFLICT (id) DO UPDATE SET google_id = EXCLUDED.google_id, full_name = EXCLUDED.full_name, email = EXCLUDED.email, phone_number = EXCLUDED.phone_number, telegram_chat_id = EXCLUDED.telegram_chat_id`,
-             [u.id, u.google_id, u.full_name, u.email, u.phone_number, u.telegram_chat_id, u.created_at || new Date()]
-           );
-           userMap[u.id] = u.id;
+            [u.id, u.google_id, u.full_name, u.email, u.phone_number, u.telegram_chat_id, u.created_at || new Date()]
+          );
+          userMap[u.id] = u.id;
         } else {
-           const existing = await pool.query('SELECT id FROM users WHERE google_id = $1', [u.google_id]);
-           if (existing.rows.length > 0) {
-             userMap[u.id] = existing.rows[0].id;
-           } else {
-             const result = await pool.query(
-               `INSERT INTO users (google_id, full_name, email, phone_number, telegram_chat_id, created_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-               [u.google_id, u.full_name, u.email, u.phone_number, u.telegram_chat_id, u.created_at || new Date()]
-             );
-             userMap[u.id] = result.rows[0].id;
-           }
+          const existing = await pool.query('SELECT id FROM users WHERE google_id = $1', [u.google_id]);
+          if (existing.rows.length > 0) {
+            userMap[u.id] = existing.rows[0].id;
+          } else {
+            const result = await pool.query(
+              `INSERT INTO users (google_id, full_name, email, phone_number, telegram_chat_id, created_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+              [u.google_id, u.full_name, u.email, u.phone_number, u.telegram_chat_id, u.created_at || new Date()]
+            );
+            userMap[u.id] = result.rows[0].id;
+          }
         }
       }
       if (importType === 'replace' || importType === 'update') await pool.query("SELECT setval('users_id_seq', COALESCE((SELECT MAX(id)+1 FROM users), 1), false)");
@@ -429,7 +433,7 @@ app.post('/api/admin/reports/import', verifyToken, verifyAdmin, async (req, res)
 
     if (data.saved_zones && Array.isArray(data.saved_zones)) {
       for (const z of data.saved_zones) {
-        const uId = userMap[z.user_id] || z.user_id; 
+        const uId = userMap[z.user_id] || z.user_id;
         if (importType === 'replace') {
           await pool.query(
             `INSERT INTO saved_zones (id, user_id, telegram_chat_id, whatsapp_number, notification_pref, priorities, lat, lng, radar_radius, geom, created_at) 
@@ -458,27 +462,27 @@ app.post('/api/admin/reports/import', verifyToken, verifyAdmin, async (req, res)
       for (const r of data.reports) {
         const uId = userMap[r.user_id] || r.user_id;
         if (importType === 'replace') {
-           await pool.query(
-             `INSERT INTO reports (id, user_id, lat, lng, type_label, note, image_url, severity, up_votes, down_votes, created_at, geom) 
+          await pool.query(
+            `INSERT INTO reports (id, user_id, lat, lng, type_label, note, image_url, severity, up_votes, down_votes, created_at, geom) 
               VALUES ($1, $2, $3::float, $4::float, $5, $6, $7, $8, $9, $10, $11, ST_SetSRID(ST_MakePoint($4::float, $3::float), 4326)::geography)`,
-             [r.id, uId, r.lat, r.lng, r.type_label, r.note, r.image_url, r.severity || 'Orta', r.up_votes || 0, r.down_votes || 0, r.created_at || new Date()]
-           );
-           reportMap[r.id] = r.id;
+            [r.id, uId, r.lat, r.lng, r.type_label, r.note, r.image_url, r.severity || 'Orta', r.up_votes || 0, r.down_votes || 0, r.created_at || new Date()]
+          );
+          reportMap[r.id] = r.id;
         } else if (importType === 'update') {
-           await pool.query(
-             `INSERT INTO reports (id, user_id, lat, lng, type_label, note, image_url, severity, up_votes, down_votes, created_at, geom) 
+          await pool.query(
+            `INSERT INTO reports (id, user_id, lat, lng, type_label, note, image_url, severity, up_votes, down_votes, created_at, geom) 
               VALUES ($1, $2, $3::float, $4::float, $5, $6, $7, $8, $9, $10, $11, ST_SetSRID(ST_MakePoint($4::float, $3::float), 4326)::geography)
               ON CONFLICT (id) DO UPDATE SET user_id = EXCLUDED.user_id, lat = EXCLUDED.lat, lng = EXCLUDED.lng, type_label = EXCLUDED.type_label, note = EXCLUDED.note, image_url = EXCLUDED.image_url, severity = EXCLUDED.severity, up_votes = EXCLUDED.up_votes, down_votes = EXCLUDED.down_votes, geom = EXCLUDED.geom`,
-             [r.id, uId, r.lat, r.lng, r.type_label, r.note, r.image_url, r.severity || 'Orta', r.up_votes || 0, r.down_votes || 0, r.created_at || new Date()]
-           );
-           reportMap[r.id] = r.id;
+            [r.id, uId, r.lat, r.lng, r.type_label, r.note, r.image_url, r.severity || 'Orta', r.up_votes || 0, r.down_votes || 0, r.created_at || new Date()]
+          );
+          reportMap[r.id] = r.id;
         } else {
-           const result = await pool.query(
-             `INSERT INTO reports (user_id, lat, lng, type_label, note, image_url, severity, up_votes, down_votes, created_at, geom) 
+          const result = await pool.query(
+            `INSERT INTO reports (user_id, lat, lng, type_label, note, image_url, severity, up_votes, down_votes, created_at, geom) 
               VALUES ($1, $2::float, $3::float, $4, $5, $6, $7, $8, $9, $10, ST_SetSRID(ST_MakePoint($3::float, $2::float), 4326)::geography) RETURNING id`,
-             [uId, r.lat, r.lng, r.type_label, r.note, r.image_url, r.severity || 'Orta', r.up_votes || 0, r.down_votes || 0, r.created_at || new Date()]
-           );
-           reportMap[r.id] = result.rows[0].id;
+            [uId, r.lat, r.lng, r.type_label, r.note, r.image_url, r.severity || 'Orta', r.up_votes || 0, r.down_votes || 0, r.created_at || new Date()]
+          );
+          reportMap[r.id] = result.rows[0].id;
         }
       }
       if (importType === 'replace' || importType === 'update') await pool.query("SELECT setval('reports_id_seq', COALESCE((SELECT MAX(id)+1 FROM reports), 1), false)");
@@ -511,7 +515,7 @@ app.post('/api/admin/reports/import', verifyToken, verifyAdmin, async (req, res)
 
     await pool.query('COMMIT');
     io.emit('reports_imported');
-    
+
     res.json({ message: "İçe aktarma başarıyla tamamlandı." });
   } catch (err) {
     await pool.query('ROLLBACK');
@@ -574,6 +578,89 @@ app.post('/api/reports/:id/vote', verifyToken, async (req, res) => {
   }
 });
 
+
+// --- YAPAY ZEKA CHATBOT ROTALARI ---
+app.post('/api/chat', verifyToken, async (req, res) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ error: "Mesaj boş olamaz." });
+
+  try {
+    // 1. Veritabanından İstatistikleri Çek
+    const statsQuery = `
+      SELECT 
+        COUNT(*) as total_reports,
+        SUM(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END) as recent_reports,
+        mode() WITHIN GROUP (ORDER BY type_label) as most_common_incident
+      FROM reports;
+    `;
+    const statsResult = await pool.query(statsQuery);
+    const stats = statsResult.rows[0];
+
+    const incidentQuery = `
+      SELECT type_label, COUNT(*) as count 
+      FROM reports 
+      GROUP BY type_label 
+      ORDER BY count DESC 
+      LIMIT 3;
+    `;
+    const incidentResult = await pool.query(incidentQuery);
+    const topIncidents = incidentResult.rows.map(row => `${row.type_label}: ${row.count}`).join(', ');
+
+    // Tüm ihbarların geçmişini (tarih ve tür olarak) çekiyoruz
+    const rawReportsQuery = `
+      SELECT type_label, created_at 
+      FROM reports 
+      ORDER BY created_at DESC 
+      LIMIT 1000;
+    `;
+    const rawReportsResult = await pool.query(rawReportsQuery);
+    const rawReports = rawReportsResult.rows;
+    const bugununTarihi = new Date().toISOString();
+
+    // 2. Sistem Komutunu (System Instruction) Hazırla
+    const systemInstruction = `
+      Sen "BiUyarı: Hayvanlar İçin Erken Uyarı Sistemi" uygulamasının uzman yapay zeka asistanısın. 
+      Kullanıcılar çobanlar, çiftçiler ve sistem yöneticileridir. Onlara karşı her zaman saygılı, yardımsever ve uzman bir dille (ama anlaşılır ve net) konuş.
+      
+      GÖREVLERİN:
+      - Mera güvenliği, hayvan hastalıkları, kurt/ayı saldırılarından korunma yolları hakkında pratik ve uygulanabilir tavsiyeler vermek.
+      - Sistem yöneticilerine (admin) uygulamanın ne kadar yararlı olduğu, sorunların nasıl çözülebileceği ve kullanıcı geribildirimleri konularında stratejik cevaplar sunmak.
+      - Uygulama kullanımı hakkında bilgi vermek: "Telegram Chat ID nasıl alınır?" (Cevap: @RawDataBot veya @userinfobot gibi botlara mesaj atarak alınabilir), "Uygulama nasıl kullanılır?" vb.
+      
+      GENEL İSTATİSTİKLER:
+      - Toplam İhbar Sayısı: ${stats.total_reports}
+      - Son 30 Gündeki İhbar Sayısı: ${stats.recent_reports}
+      - En Sık Görülen Olay: ${stats.most_common_incident}
+      - Olay Dağılımı (İlk 3): ${topIncidents}
+      
+      DETAYLI OLAY GEÇMİŞİ (DİNAMİK SORULAR İÇİN):
+      Şu anki tarih ve saat: ${bugununTarihi}
+      Aşağıda sistemdeki son 1000 olayın tarihleri ve türleri JSON formatında verilmiştir. 
+      Eğer kullanıcı "son 10 günde kaç şüpheli şahıs görüldü", "son 5 saatte kaç olay oldu" gibi belirli bir zaman dilimi veya olaya özel istatistik sorarsa, aşağıdaki "created_at" tarihlerini şu anki tarihle karşılaştırıp hesaplayarak DİNAMİK ve KESİN bir cevap ver. Kendinden veri uydurma, sadece bu listeyi say.
+      Liste: ${JSON.stringify(rawReports)}
+      
+      ÖNEMLİ KURALLAR:
+      - Sadece bu projeyle (tarım, hayvancılık, mera güvenliği, yazılım/uygulama desteği) ilgili konularda konuş. Alakasız sorulara kibarca konuya dönmeyi teklif et.
+      - Cevaplarını kısa, öz ve okunabilir paragraflar/maddeler halinde ver.
+    `;
+
+    // 3. Gemini API'sine İstek At
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: message,
+      config: {
+        systemInstruction: systemInstruction,
+        temperature: 0.7
+      }
+    });
+
+    res.json({ reply: response.text });
+
+  } catch (err) {
+    console.error("Chatbot Hatası:", err);
+    res.status(500).json({ error: "Yapay zeka yanıt verirken bir sorun oluştu." });
+  }
+});
 
 
 server.listen(3000, () => {
