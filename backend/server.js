@@ -180,15 +180,108 @@ app.put('/api/auth/profile', verifyToken, async (req, res) => {
   }
 });
 
-// GET ROTASI
-app.get('/api/reports', async (req, res) => {
+// LİDERLİK TABLOSU (Oyunlaştırma)
+app.get('/api/leaderboard', async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT id, user_id, lat, lng, type_label AS "typeLabel", note, image_url AS "imageUrl", up_votes, down_votes, severity, created_at FROM reports ORDER BY created_at DESC'
-    );
+    const result = await pool.query(`
+      SELECT u.id, u.username, u.full_name, u.trust_score, COUNT(r.id) AS report_count
+      FROM users u
+      LEFT JOIN reports r ON u.id = r.user_id
+      GROUP BY u.id
+      ORDER BY u.trust_score DESC, report_count DESC
+      LIMIT 10
+    `);
     res.json(result.rows);
   } catch (err) {
     res.status(500).send(err.message);
+  }
+});
+
+// GET ROTASI
+app.get('/api/reports', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        r.id, r.user_id, r.lat, r.lng, r.type_label AS "typeLabel", r.note, r.image_url AS "imageUrl", 
+        r.up_votes, r.down_votes, r.severity, r.created_at,
+        u.username, u.trust_score
+      FROM reports r
+      LEFT JOIN users u ON r.user_id = u.id
+      ORDER BY r.created_at DESC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+// İHBAR OYLAMA (Doğrulama Sistemi)
+app.post('/api/reports/:id/vote', verifyToken, async (req, res) => {
+  const reportId = req.params.id;
+  const { voteType } = req.body; // 'upvote' or 'downvote'
+  const userGoogleId = String(req.user.id);
+
+  try {
+    // Kullanıcıyı bul
+    const userRes = await pool.query('SELECT id FROM users WHERE google_id = $1', [userGoogleId]);
+    if (userRes.rows.length === 0) return res.status(404).send('Kullanıcı bulunamadı.');
+    const userId = userRes.rows[0].id;
+
+    // Önceki oyu kontrol et
+    const existingVote = await pool.query('SELECT * FROM report_votes WHERE report_id = $1 AND user_id = $2', [reportId, userId]);
+    let prevVote = null;
+
+    if (existingVote.rows.length > 0) {
+      prevVote = existingVote.rows[0].vote_type;
+      if (prevVote === voteType) {
+        return res.status(400).send('Bu ihbara zaten aynı oyu verdiniz.');
+      }
+      // Oyu güncelle
+      await pool.query('UPDATE report_votes SET vote_type = $1 WHERE report_id = $2 AND user_id = $3', [voteType, reportId, userId]);
+    } else {
+      // Yeni oy ekle
+      await pool.query('INSERT INTO report_votes (report_id, user_id, vote_type) VALUES ($1, $2, $3)', [reportId, userId, voteType]);
+    }
+
+    // Reports tablosundaki up_votes ve down_votes sayılarını güncelle
+    let upChange = 0;
+    let downChange = 0;
+
+    if (voteType === 'upvote') {
+      upChange = 1;
+      if (prevVote === 'downvote') downChange = -1;
+    } else if (voteType === 'downvote') {
+      downChange = 1;
+      if (prevVote === 'upvote') upChange = -1;
+    }
+
+    await pool.query(
+      'UPDATE reports SET up_votes = up_votes + $1, down_votes = down_votes + $2 WHERE id = $3',
+      [upChange, downChange, reportId]
+    );
+
+    // İhbar sahibinin trust_score'unu güncelle
+    const reportRes = await pool.query('SELECT user_id FROM reports WHERE id = $1', [reportId]);
+    if (reportRes.rows.length > 0) {
+      const authorId = reportRes.rows[0].user_id;
+      if (authorId) {
+        let scoreChange = 0;
+        if (voteType === 'upvote') scoreChange = 2; // Doğrulanınca +2
+        else if (voteType === 'downvote') scoreChange = -5; // Yalanlanırsa -5
+        
+        if (prevVote === 'upvote' && voteType === 'downvote') scoreChange = -7;
+        if (prevVote === 'downvote' && voteType === 'upvote') scoreChange = 7;
+
+        await pool.query('UPDATE users SET trust_score = trust_score + $1 WHERE id = $2', [scoreChange, authorId]);
+      }
+    }
+
+    const updatedReport = await pool.query('SELECT up_votes, down_votes FROM reports WHERE id = $1', [reportId]);
+    res.json(updatedReport.rows[0]);
+
+  } catch (err) {
+    console.error("Oy verme hatası:", err.message);
+    res.status(500).send('Oy işlemi başarısız oldu.');
   }
 });
 
@@ -206,9 +299,14 @@ app.post('/api/reports', verifyToken, upload.single('image'), async (req, res) =
     const dbUserId = userResult.rows[0].id;
 
     const result = await pool.query(
-      `INSERT INTO reports (user_id, lat, lng, type_label, note, image_url, severity, geom) 
-       VALUES ($1, $2::float, $3::float, $4, $5, $6, $7, ST_SetSRID(ST_MakePoint($3::float, $2::float), 4326)::geography) 
-       RETURNING id, user_id, lat, lng, type_label AS "typeLabel", note, image_url AS "imageUrl", severity, up_votes, down_votes, created_at`,
+      `WITH inserted AS (
+         INSERT INTO reports (user_id, lat, lng, type_label, note, image_url, severity, geom) 
+         VALUES ($1, $2::float, $3::float, $4, $5, $6, $7, ST_SetSRID(ST_MakePoint($3::float, $2::float), 4326)::geography) 
+         RETURNING id, user_id, lat, lng, type_label AS "typeLabel", note, image_url AS "imageUrl", severity, up_votes, down_votes, created_at
+       )
+       SELECT inserted.*, u.username, u.trust_score
+       FROM inserted
+       LEFT JOIN users u ON inserted.user_id = u.id`,
       [dbUserId, numLat, numLng, typeLabel, note, imageUrl, severity || 'Orta']
     );
     const newReport = result.rows[0];
@@ -534,49 +632,6 @@ app.delete('/api/reports/:id', verifyToken, verifyAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/reports/:id/vote', verifyToken, async (req, res) => {
-  const reportId = req.params.id;
-  const { voteType } = req.body;
-
-  try {
-    const userResult = await pool.query('SELECT id FROM users WHERE google_id = $1', [String(req.user.id)]);
-    if (userResult.rows.length === 0) return res.status(404).json({ message: "Kullanıcı bulunamadı." });
-    const dbUserId = userResult.rows[0].id;
-
-    const reportResult = await pool.query('SELECT user_id FROM reports WHERE id = $1', [reportId]);
-    if (reportResult.rows.length === 0) return res.status(404).json({ message: "İhbar bulunamadı." });
-    if (reportResult.rows[0].user_id === dbUserId) {
-      return res.status(403).json({ message: "Kendi ihbarınıza oy veremezsiniz!" });
-    }
-
-    const existingVote = await pool.query('SELECT id FROM report_votes WHERE report_id = $1 AND user_id = $2', [reportId, dbUserId]);
-    if (existingVote.rows.length > 0) {
-      return res.status(400).json({ message: "Bu ihbara zaten oy verdiniz." });
-    }
-
-    await pool.query(
-      'INSERT INTO report_votes (report_id, user_id, vote_type) VALUES ($1, $2, $3)',
-      [reportId, dbUserId, voteType]
-    );
-
-    let updateQuery = '';
-    if (voteType === 'up') {
-      updateQuery = 'UPDATE reports SET up_votes = up_votes + 1 WHERE id = $1 RETURNING id, up_votes, down_votes';
-    } else if (voteType === 'down') {
-      updateQuery = 'UPDATE reports SET down_votes = down_votes + 1 WHERE id = $1 RETURNING id, up_votes, down_votes';
-    }
-
-    const updatedReportRes = await pool.query(updateQuery, [reportId]);
-    const updatedReport = updatedReportRes.rows[0];
-
-    io.emit('vote_updated', updatedReport);
-    res.json({ message: "Oyunuz sisteme kaydedildi, teşekkürler!" });
-
-  } catch (err) {
-    console.error("Oylama Sistemi Hatası:", err.message);
-    res.status(500).json({ message: "Oylama işlemi sırasında sunucu hatası oluştu." });
-  }
-});
 
 
 // --- YAPAY ZEKA CHATBOT ROTALARI ---

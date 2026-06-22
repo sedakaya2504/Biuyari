@@ -1,17 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Circle } from 'react-leaflet';
 import { io } from 'socket.io-client';
-import { AlertTriangle, MapPin, Camera, Send, Clock, Flame, Shield, LogOut, ArrowUp, ArrowDown, Settings, X, Plus, Download, Upload } from 'lucide-react';
+import { AlertTriangle, MapPin, Camera, Send, Clock, Flame, Shield, LogOut, ArrowUp, ArrowDown, Settings, X, Plus, Download, Upload, Moon, Sun, User as UserIcon } from 'lucide-react';
 import L from 'leaflet';
+import { Joyride, STATUS } from 'react-joyride';
 import Chatbot from './components/Chatbot';
 import './App.css';
 
 const hazardEmojis = {
   'Yırtıcı Hayvan Saldırısı': '🐺',
   'Başıboş Sürü': '🐑',
-  'Yaralı Hayvan': '🤕',
+  'Yaralı Hayvan': '❤️‍🩹',
   'Enfekte Hayvan': '🦠',
-  'Şüpheli Şahıs': '👤'
+  'Şüpheli Şahıs': '👤',
+  'Diğer': '❓'
+};
+
+const renderIcon = (val, size = '18px') => {
+  if (val && val.startsWith('/')) {
+    return <img src={val} alt="icon" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover' }} />;
+  }
+  return <span style={{ fontSize: size }}>{val}</span>;
 };
 
 const userIcon = L.divIcon({
@@ -42,7 +51,98 @@ const getTimeAgo = (dateString) => {
   return `${diffDay} gün önce`;
 };
 
+const iconCache = {};
+
+const ReportItem = ({ r, index, isHotspot, currentUser, BACKEND_URL, token }) => {
+  const upRef = useRef(null);
+  const downRef = useRef(null);
+
+  const localHandleVote = async (voteType) => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/reports/${r.id}/vote`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ voteType })
+      });
+      if (!res.ok) { 
+        const errText = await res.text();
+        alert(errText || "İşlem başarısız."); 
+        return; 
+      }
+      const updatedReport = await res.json();
+      
+      // DOĞRUDAN DOM GÜNCELLEMESİ (React-Leaflet Çökmesini Önlemek İçin)
+      if (upRef.current) upRef.current.innerText = updatedReport.up_votes;
+      if (downRef.current) downRef.current.innerText = updatedReport.down_votes;
+      
+      // Obje referansını sessizce güncelle (Popup kapatılıp açılırsa yeni değer görünsün)
+      r.up_votes = updatedReport.up_votes;
+      r.down_votes = updatedReport.down_votes;
+      
+    } catch (error) { alert("Sunucuya bağlanılamadı."); }
+  };
+
+  return (
+    <div style={{ marginBottom: '12px', fontSize: '13px', background: '#f9fafb', padding: '10px', borderRadius: '8px', borderLeft: index === 0 ? '3px solid #ef4444' : 'none' }}>
+      {index === 0 && isHotspot && (
+        <div style={{ color: '#ef4444', fontSize: '11px', fontWeight: 'bold', marginBottom: '5px' }}>🔥 EN GÜNCEL İHBAR</div>
+      )}
+
+      <div style={{ fontWeight: 'bold', color: '#b91c1c', marginBottom: '6px', fontSize: '14px', borderBottom: '1px solid #e5e7eb', paddingBottom: '4px' }}>
+        🚨 {r.typeLabel}
+      </div>
+
+      <div style={{ marginBottom: '8px', fontSize: '12px', color: '#4b5563', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <UserIcon size={14} color="#4f46e5" />
+        <strong>{r.username || 'Gizli Kullanıcı'}</strong>
+        {r.trust_score !== undefined && r.trust_score !== null && (
+          <span style={{ background: '#e0e7ff', color: '#4338ca', padding: '2px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: 'bold' }}>
+            ⭐ {r.trust_score} Puan
+          </span>
+        )}
+      </div>
+
+      <strong style={{ color: '#4b5563' }}>Kullanıcı Notu:</strong> {r.note || 'Belirtilmemiş'}
+      <br />
+      <small style={{ color: '#9ca3af' }}>
+        {new Date(r.created_at).toLocaleString('tr-TR')} <span style={{ fontWeight: '500', color: '#6b7280' }}>({getTimeAgo(r.created_at)})</span>
+      </small>
+
+      {r.imageUrl && (
+        <img src={r.imageUrl} alt="Tehlike" style={{ width: '100%', borderRadius: '5px', marginTop: '6px' }} />
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed #e5e7eb' }}>
+        <button
+          disabled={!currentUser || Number(currentUser.id) === Number(r.user_id)}
+          onClick={(e) => { e.stopPropagation(); localHandleVote('upvote'); }}
+          style={{
+            opacity: (!currentUser || Number(currentUser.id) === Number(r.user_id)) ? 0.5 : 1,
+            cursor: (!currentUser || Number(currentUser.id) === Number(r.user_id)) ? 'not-allowed' : 'pointer',
+            background: '#ecfdf5', color: '#059669', border: 'none', padding: '4px 8px', borderRadius: '5px', display: 'flex', gap: '4px'
+          }}
+        >
+          👍 <strong ref={upRef}>{r.up_votes || 0}</strong>
+        </button>
+
+        <button
+          disabled={!currentUser || Number(currentUser.id) === Number(r.user_id)}
+          onClick={(e) => { e.stopPropagation(); localHandleVote('downvote'); }}
+          style={{
+            opacity: (!currentUser || Number(currentUser.id) === Number(r.user_id)) ? 0.5 : 1,
+            cursor: (!currentUser || Number(currentUser.id) === Number(r.user_id)) ? 'not-allowed' : 'pointer',
+            background: '#fef2f2', color: '#dc2626', border: 'none', padding: '4px 8px', borderRadius: '5px', display: 'flex', gap: '4px'
+          }}
+        >
+          👎 <strong ref={downRef}>{r.down_votes || 0}</strong>
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const getHotspotIcon = (type, reportCount, newestDate, userPrioritiesArray) => {
+  const cacheKey = `${type}-${reportCount}-${newestDate}-${userPrioritiesArray.join(',')}`;
+  if (iconCache[cacheKey]) return iconCache[cacheKey];
+
   let emoji = hazardEmojis[type] || '⚠️';
 
   const rankIndex = userPrioritiesArray.indexOf(type);
@@ -71,12 +171,16 @@ const getHotspotIcon = (type, reportCount, newestDate, userPrioritiesArray) => {
     pulseScale = 1.8;
   }
 
-  return L.divIcon({
+  const isImage = emoji.startsWith('/');
+
+  const icon = L.divIcon({
     className: 'clear-custom-icon',
     html: `
       <div class="hazard-container" style="opacity: ${opacity}; transition: all 0.5s;">
         ${pulseSpeed > 0 ? `<div class="hazard-pulse" style="background-color: ${bgColor}; animation-duration: ${pulseSpeed}s; transform: scale(${pulseScale})"></div>` : ''}
-        <div class="hazard-icon" style="background-color: ${bgColor}">${emoji}</div>
+        <div class="hazard-icon" style="background-color: ${bgColor}; ${isImage ? 'padding: 0; overflow: hidden;' : ''}">
+          ${isImage ? `<img src="${emoji}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />` : emoji}
+        </div>
         ${reportCount > 1 ? `<div class="hazard-badge">${reportCount}</div>` : ''}
       </div>
     `,
@@ -84,6 +188,9 @@ const getHotspotIcon = (type, reportCount, newestDate, userPrioritiesArray) => {
     iconAnchor: [22, 22],
     popupAnchor: [0, -22]
   });
+
+  iconCache[cacheKey] = icon;
+  return icon;
 };
 
 const groupReportsIntoHotspots = (reports) => {
@@ -128,6 +235,33 @@ function App() {
   const [importType, setImportType] = useState('append');
   const [exportType, setExportType] = useState('all');
 
+  const [theme, setTheme] = useState(localStorage.getItem('BiUyariTheme') || 'light');
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('BiUyariTheme', theme);
+  }, [theme]);
+
+  const [runTour, setRunTour] = useState(false);
+  const tourSteps = [
+    { target: '.btn-add-report', content: 'Etrafınızda gördüğünüz bir tehlikeyi hızlıca sisteme buradan bildirebilirsiniz.', disableBeacon: true },
+    { target: '.btn-locate', content: 'Haritada anlık konumunuza gitmek için buraya tıklayabilirsiniz.' },
+    { target: '.filter-bar', content: 'Buradan haritadaki ihbarları son 1 saat, 24 saat gibi belirli zaman dilimlerine göre filtreleyebilirsiniz.' },
+    { target: '.btn-theme', content: 'Gözünüzü yormaması için uygulamanın gece ve gündüz modu arasında buradan geçiş yapabilirsiniz.' },
+    { target: '.icon-settings', content: 'Radar ayarlarınızı, bildirimleri ve şifrenizi buradan yönetebilirsiniz.' },
+    { target: '.btn-profile', content: 'Hesap detaylarınızı ve topluluk katkınızı buradan görüntüleyebilir, sistemden çıkış yapabilirsiniz.' },
+    { target: '.btn-chatbot', content: 'Sistemle ilgili tüm sorularınızı ve yapay zeka destekli tavsiyeleri buradaki akıllı asistanımıza sorabilirsiniz.' }
+  ];
+
+  const handleJoyrideCallback = (data) => {
+    const { status, action } = data;
+    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status) || action === 'close') {
+      setRunTour(false);
+      localStorage.setItem('BiUyariTourDone', 'true');
+    }
+  };
+
+  const [profileOpen, setProfileOpen] = useState(false);
+
   // --- WHATSAPP BİLDİRİM STATE'LERİ EKLENDİ ---
   const [telegramChatId, setTelegramChatId] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
@@ -139,7 +273,8 @@ function App() {
     'Başıboş Sürü',
     'Yaralı Hayvan',
     'Enfekte Hayvan',
-    'Şüpheli Şahıs'
+    'Şüpheli Şahıs',
+    'Diğer'
   ]);
   const [availableHazards, setAvailableHazards] = useState([]);
 
@@ -176,6 +311,7 @@ function App() {
   const [typeLabel, setTypeLabel] = useState('Yırtıcı Hayvan Saldırısı');
   const [note, setNote] = useState('');
   const [photo, setPhoto] = useState(null);
+  const [leaderboard, setLeaderboard] = useState([]);
 
   const [regFullName, setRegFullName] = useState('');
   const [regPhone, setRegPhone] = useState('');
@@ -236,6 +372,14 @@ function App() {
     }
   }, [token]);
 
+  useEffect(() => {
+    if (profileOpen) {
+      fetch(`${BACKEND_URL}/api/leaderboard`)
+        .then(res => res.json())
+        .then(data => setLeaderboard(data))
+        .catch(err => console.error("Liderlik tablosu çekilemedi:", err));
+    }
+  }, [profileOpen, BACKEND_URL]);
   const handleGoogleLogin = () => { window.location.href = `${BACKEND_URL}/api/auth/google`; };
 
   const handleLogout = () => {
@@ -332,17 +476,6 @@ function App() {
       });
       setFormOpen(false); setNote(''); setPhoto(null);
     } catch (error) { alert("Gönderim başarısız."); }
-  };
-
-  const handleVote = async (reportId, voteType) => {
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/reports/${reportId}/vote`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ voteType })
-      });
-      const data = await res.json();
-      if (!res.ok) { alert(data.message || "İşlem başarısız."); return; }
-      alert(data.message);
-    } catch (error) { alert("Sunucuya bağlanılamadı."); }
   };
 
   const handleExport = async () => {
@@ -458,6 +591,7 @@ function App() {
         if (res.ok) {
           const updatedUser = await res.json();
           setCurrentUser(updatedUser);
+          setRunTour(true);
           alert("Kayıt başarıyla tamamlandı!");
         } else {
           alert("Güncelleme başarısız oldu.");
@@ -493,13 +627,23 @@ function App() {
 
   return (
     <div className="app-container">
+      <Joyride
+        steps={tourSteps}
+        run={runTour}
+        continuous={true}
+        showProgress={true}
+        showSkipButton={true}
+        callback={handleJoyrideCallback}
+        styles={{ options: { primaryColor: '#ef4444' } }}
+        locale={{ last: 'Bitir', next: 'İleri', back: 'Geri', skip: 'Atla' }}
+      />
       <header className="header">
         <h1><AlertTriangle className="icon" /> BiUyarı</h1>
         <div className="header-buttons">
           {currentUser && (
-            <span style={{ marginRight: '10px', padding: '5px 10px', borderRadius: '15px', backgroundColor: currentUser.role === 'admin' ? '#fef08a' : '#e0e7ff', color: currentUser.role === 'admin' ? '#854d0e' : '#3730a3', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
+            <button onClick={() => setProfileOpen(true)} className="btn-profile" style={{ background: 'transparent', border: 'none', cursor: 'pointer', marginRight: '5px', padding: '5px 10px', borderRadius: '15px', backgroundColor: currentUser.role === 'admin' ? '#fef08a' : '#e0e7ff', color: currentUser.role === 'admin' ? '#854d0e' : '#3730a3', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
               {currentUser.role === 'admin' ? `👑 ${currentUser.username || 'Yönetici'}` : `👤 ${currentUser.username || 'Kullanıcı'}`}
-            </span>
+            </button>
           )}
           {currentUser && currentUser.role === 'admin' && (
             <button onClick={() => { setAdminPanelOpen(true); setSettingsOpen(false); setFormOpen(false); }} className="btn-icon" style={{ backgroundColor: '#fef08a', color: '#854d0e', border: 'none', marginLeft: '5px', fontWeight: 'bold' }}>
@@ -515,7 +659,7 @@ function App() {
               <select
                 value={heatmapRadius}
                 onChange={(e) => setHeatmapRadius(Number(e.target.value))}
-                style={{ padding: '6px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', backgroundColor: 'white' }}
+                style={{ padding: '6px', borderRadius: '6px', border: '1px solid var(--border-light)', fontSize: '13px', backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)' }}
               >
                 <option value="0.5">500 m</option>
                 <option value="1">1 KM</option>
@@ -530,7 +674,10 @@ function App() {
           <button onClick={locateUser} className="btn-locate">
             <MapPin size={18} /> Beni Bul
           </button>
-          <button onClick={() => { setSettingsOpen(true); setFormOpen(false); }} className="btn-icon" style={{ backgroundColor: '#f3f4f6', color: '#1f2937', border: 'none', marginLeft: '5px' }}>
+          <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className="btn-icon btn-theme">
+            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+          </button>
+          <button onClick={() => { setSettingsOpen(true); setFormOpen(false); }} className="btn-icon icon-settings" style={{ backgroundColor: '#f3f4f6', color: '#1f2937', border: 'none', marginLeft: '5px' }}>
             <Settings size={18} />
           </button>
           <button onClick={handleLogout} className="btn-icon" style={{ backgroundColor: '#fee2e2', color: '#b91c1c', border: 'none', marginLeft: '5px' }}>
@@ -628,52 +775,15 @@ function App() {
 
                 <div style={{ maxHeight: '220px', overflowY: 'auto', paddingRight: '5px' }}>
                   {hotspot.reports.map((r, index) => (
-                    <div key={index} style={{ marginBottom: '12px', fontSize: '13px', background: '#f9fafb', padding: '10px', borderRadius: '8px', borderLeft: index === 0 ? '3px solid #ef4444' : 'none' }}>
-
-                      {index === 0 && hotspot.reports.length > 1 && (
-                        <div style={{ color: '#ef4444', fontSize: '11px', fontWeight: 'bold', marginBottom: '5px' }}>🔥 EN GÜNCEL İHBAR</div>
-                      )}
-
-                      <div style={{ fontWeight: 'bold', color: '#b91c1c', marginBottom: '6px', fontSize: '14px', borderBottom: '1px solid #e5e7eb', paddingBottom: '4px' }}>
-                        🚨 {r.typeLabel}
-                      </div>
-
-                      <strong style={{ color: '#4b5563' }}>Kullanıcı Notu:</strong> {r.note || 'Belirtilmemiş'}
-                      <br />
-                      <small style={{ color: '#9ca3af' }}>
-                        {new Date(r.created_at).toLocaleString('tr-TR')} <span style={{ fontWeight: '500', color: '#6b7280' }}>({getTimeAgo(r.created_at)})</span>
-                      </small>
-
-                      {r.imageUrl && (
-                        <img src={r.imageUrl} alt="Tehlike" style={{ width: '100%', borderRadius: '5px', marginTop: '6px' }} />
-                      )}
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed #e5e7eb' }}>
-                        <button
-                          disabled={!currentUser || Number(currentUser.id) === Number(r.user_id)}
-                          onClick={() => handleVote(r.id, 'up')}
-                          style={{
-                            opacity: (!currentUser || Number(currentUser.id) === Number(r.user_id)) ? 0.5 : 1,
-                            cursor: (!currentUser || Number(currentUser.id) === Number(r.user_id)) ? 'not-allowed' : 'pointer',
-                            background: '#ecfdf5', color: '#059669', border: 'none', padding: '4px 8px', borderRadius: '5px', display: 'flex', gap: '4px'
-                          }}
-                        >
-                          👍 <strong>{r.up_votes || 0}</strong>
-                        </button>
-
-                        <button
-                          disabled={!currentUser || Number(currentUser.id) === Number(r.user_id)}
-                          onClick={() => handleVote(r.id, 'down')}
-                          style={{
-                            opacity: (!currentUser || Number(currentUser.id) === Number(r.user_id)) ? 0.5 : 1,
-                            cursor: (!currentUser || Number(currentUser.id) === Number(r.user_id)) ? 'not-allowed' : 'pointer',
-                            background: '#fef2f2', color: '#dc2626', border: 'none', padding: '4px 8px', borderRadius: '5px', display: 'flex', gap: '4px'
-                          }}
-                        >
-                          👎 <strong>{r.down_votes || 0}</strong>
-                        </button>
-                      </div>
-                    </div>
+                    <ReportItem 
+                      key={r.id || index} 
+                      r={r} 
+                      index={index} 
+                      isHotspot={hotspot.reports.length > 1} 
+                      currentUser={currentUser} 
+                      BACKEND_URL={BACKEND_URL} 
+                      token={token} 
+                    />
                   ))}
                 </div>
               </Popup>
@@ -702,15 +812,77 @@ function App() {
         </button>
       </div>
 
+      {/* PROFİL PANELİ (SLIDE-OVER) */}
+      {profileOpen && currentUser && (
+        <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: '100%', maxWidth: '350px', backgroundColor: 'var(--bg-modal)', zIndex: 10000, boxShadow: '-5px 0 25px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', transition: 'transform 0.3s' }}>
+          <div style={{ padding: '20px', backgroundColor: '#3b82f6', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}><UserIcon size={24} /> Profilim</h3>
+            <button onClick={() => setProfileOpen(false)} style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer' }}><X size={24} /></button>
+          </div>
+          <div style={{ padding: '20px', flex: 1, overflowY: 'auto', color: 'var(--text-secondary)' }}>
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <div style={{ width: '80px', height: '80px', backgroundColor: 'var(--profile-bg)', color: 'var(--profile-text)', borderRadius: '50%', margin: '0 auto 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px' }}>
+                {currentUser.username ? currentUser.username.charAt(0).toUpperCase() : 'U'}
+              </div>
+              <h2 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-primary)' }}>{currentUser.full_name || currentUser.username}</h2>
+              <p style={{ margin: '5px 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>{currentUser.role === 'admin' ? 'Yönetici Yetkisi' : 'Standart Kullanıcı'}</p>
+            </div>
+            
+            <div style={{ backgroundColor: 'var(--bg-panel)', padding: '15px', borderRadius: '12px', marginBottom: '20px' }}>
+              <h4 style={{ margin: '0 0 10px', color: 'var(--text-secondary)', fontSize: '14px' }}>İletişim Bilgileri</h4>
+              <p style={{ margin: '5px 0', fontSize: '13px', color: 'var(--text-primary)' }}><strong>Telefon:</strong> {currentUser.phone_number || 'Belirtilmemiş'}</p>
+              <p style={{ margin: '5px 0', fontSize: '13px', color: 'var(--text-primary)' }}><strong>Telegram ID:</strong> {currentUser.telegram_chat_id || 'Bağlı Değil'}</p>
+            </div>
+
+            <div style={{ backgroundColor: 'var(--community-bg)', border: '1px solid var(--community-border)', padding: '15px', borderRadius: '12px', marginBottom: '20px', textAlign: 'center' }}>
+              <h4 style={{ margin: '0 0 5px', color: 'var(--community-title)', fontSize: '14px' }}>Topluluk Katkısı</h4>
+              <p style={{ margin: 0, fontSize: '13px', color: 'var(--community-text)' }}>Yaptığınız bildirimlerle sistemi daha güvenli hale getiriyorsunuz!</p>
+              
+              {/* LİDERLİK TABLOSU */}
+              <div style={{ marginTop: '15px', textAlign: 'left', backgroundColor: 'var(--bg-modal)', borderRadius: '8px', padding: '10px' }}>
+                <h4 style={{ margin: '0 0 10px', fontSize: '14px', color: 'var(--text-primary)', borderBottom: '1px solid var(--border-light)', paddingBottom: '5px' }}>🏆 Topluluk Liderleri</h4>
+                {leaderboard.length === 0 ? (
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Henüz sıralama yok.</p>
+                ) : (
+                  leaderboard.map((user, idx) => {
+                    let badge = 'Dikkatli Gözcü 👁️';
+                    if (user.trust_score > 100) badge = 'Kahraman Çoban 🦅';
+                    else if (user.trust_score > 70) badge = 'Usta İzci 🐺';
+                    else if (user.trust_score > 55) badge = 'Deneyimli Koruyucu 🛡️';
+
+                    return (
+                      <div key={user.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #f1f5f9' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontWeight: 'bold', color: idx === 0 ? '#eab308' : idx === 1 ? '#94a3b8' : idx === 2 ? '#b45309' : 'var(--text-muted)' }}>{idx + 1}.</span>
+                          <span style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-primary)' }}>{user.username || 'Gizli Kullanıcı'}</span>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '11px', color: '#059669', fontWeight: 'bold' }}>{user.trust_score} Puan</div>
+                          <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{badge}</div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <button onClick={handleLogout} style={{ width: '100%', padding: '12px', backgroundColor: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <LogOut size={18} /> Çıkış Yap
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* AYARLAR MODALI */}
       {settingsOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '16px', width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
-            <div style={{ padding: '20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 10 }}>
-              <h3 style={{ margin: 0, color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ backgroundColor: 'var(--bg-modal)', borderRadius: '16px', width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+            <div style={{ padding: '20px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, backgroundColor: 'var(--bg-modal)', zIndex: 10 }}>
+              <h3 style={{ margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Settings size={22} color="#3b82f6" /> Ayarlar
               </h3>
-              <button type="button" onClick={() => setSettingsOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', padding: '4px' }}>
+              <button type="button" onClick={() => setSettingsOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
                 <X size={24} />
               </button>
             </div>
@@ -719,23 +891,23 @@ function App() {
 
               {/* --- YENİ EKLENEN ÇOK KANALLI BİLDİRİM FORMU --- */}
               <div style={{ marginBottom: '24px' }}>
-                <h4 style={{ margin: '0 0 10px 0', color: '#374151', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '6px' }}><Shield size={16} /> Radar ve Bildirim Ayarları</h4>
+                <h4 style={{ margin: '0 0 10px 0', color: 'var(--text-secondary)', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '6px' }}><Shield size={16} /> Radar ve Bildirim Ayarları</h4>
 
-                <select value={notificationPref} onChange={(e) => setNotificationPref(e.target.value)} style={{ width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', backgroundColor: 'white', boxSizing: 'border-box' }}>
+                <select value={notificationPref} onChange={(e) => setNotificationPref(e.target.value)} style={{ width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '8px', border: '1px solid var(--border-light)', fontSize: '14px', backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)', boxSizing: 'border-box' }}>
                   <option value="telegram">Sadece Telegram'dan Bildirim Al</option>
                   <option value="whatsapp">Sadece WhatsApp'tan Bildirim Al</option>
                   <option value="both">Her İkisinden de Bildirim Al</option>
                 </select>
 
                 {(notificationPref === 'telegram' || notificationPref === 'both') && (
-                  <input type="text" placeholder="Telegram Chat ID (Örn: 123456789)" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)} style={{ width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }} />
+                  <input type="text" placeholder="Telegram Chat ID (Örn: 123456789)" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)} style={{ width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '8px', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: '14px', boxSizing: 'border-box' }} />
                 )}
 
                 {(notificationPref === 'whatsapp' || notificationPref === 'both') && (
-                  <input type="text" placeholder="WhatsApp Numaranız (Örn: 5551234567)" value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} style={{ width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }} />
+                  <input type="text" placeholder="WhatsApp Numaranız (Örn: 5551234567)" value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} style={{ width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '8px', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: '14px', boxSizing: 'border-box' }} />
                 )}
 
-                <select value={radius} onChange={(e) => setRadius(Number(e.target.value))} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', backgroundColor: 'white', boxSizing: 'border-box' }}>
+                <select value={radius} onChange={(e) => setRadius(Number(e.target.value))} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-light)', fontSize: '14px', backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)', boxSizing: 'border-box' }}>
                   <option value="1">Çok Yakın Çevre (1 KM Yarıçap)</option>
                   <option value="2">Yakın Çevre (2 KM Yarıçap)</option>
                   <option value="5">Normal Bölge (5 KM Yarıçap)</option>
@@ -745,18 +917,18 @@ function App() {
               </div>
 
               <div style={{ marginBottom: '24px' }}>
-                <h4 style={{ margin: '0 0 10px 0', color: '#374151', fontSize: '15px' }}>Tehlike Öncelik Sıralaması</h4>
-                <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px', lineHeight: '1.4' }}>
+                <h4 style={{ margin: '0 0 10px 0', color: 'var(--text-secondary)', fontSize: '15px' }}>Tehlike Öncelik Sıralaması</h4>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px', lineHeight: '1.4' }}>
                   Harita renklerini belirlemek için tehlikeleri aşağı/yukarı taşıyın veya çıkarın.
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '15px' }}>
                   {priorities.map((hazard, index) => (
-                    <div key={hazard} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f8fafc', padding: '10px 12px', borderRadius: '8px', borderLeft: `5px solid ${priorityColors[index] || '#9ca3af'}`, border: '1px solid #e2e8f0' }}>
+                    <div key={hazard} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'var(--bg-panel)', padding: '10px 12px', borderRadius: '8px', borderLeft: `5px solid ${priorityColors[index] || '#9ca3af'}`, border: '1px solid var(--border-light)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ fontWeight: 'bold', color: priorityColors[index] || '#64748b', fontSize: '14px', width: '20px' }}>{index + 1}.</span>
-                        <span style={{ fontSize: '18px' }}>{hazardEmojis[hazard]}</span>
-                        <span style={{ fontSize: '14px', color: '#334155', fontWeight: '500' }}>{hazard}</span>
+                        <span style={{ fontWeight: 'bold', color: priorityColors[index] || 'var(--text-muted)', fontSize: '14px', width: '20px' }}>{index + 1}.</span>
+                        {renderIcon(hazardEmojis[hazard], '18px')}
+                        <span style={{ fontSize: '14px', color: 'var(--text-primary)', fontWeight: '500' }}>{hazard}</span>
                       </div>
 
 
@@ -781,7 +953,7 @@ function App() {
                       {availableHazards.map(hazard => (
                         <div key={hazard} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#ffffff', padding: '8px 12px', borderRadius: '8px', border: '1px dashed #cbd5e1', opacity: 0.8 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <span style={{ fontSize: '16px' }}>{hazardEmojis[hazard]}</span>
+                            {renderIcon(hazardEmojis[hazard], '16px')}
                             <span style={{ fontSize: '13px', color: '#475569', fontWeight: '500' }}>{hazard}</span>
                           </div>
                           <button type="button" onClick={() => addHazard(hazard)} style={{ background: '#dcfce7', border: 'none', color: '#16a34a', padding: '4px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>
@@ -881,11 +1053,9 @@ function App() {
         <form className="report-form" onSubmit={handleSubmit}>
           <h3>Tehlike Bildirimi</h3>
           <select value={typeLabel} onChange={(e) => setTypeLabel(e.target.value)}>
-            <option value="Yırtıcı Hayvan Saldırısı">🐺 Yırtıcı Hayvan Saldırısı</option>
-            <option value="Başıboş Sürü">🐑 Başıboş Sürü</option>
-            <option value="Yaralı Hayvan">🤕 Yaralı Hayvan</option>
-            <option value="Enfekte Hayvan">🦠 Enfekte Hayvan</option>
-            <option value="Şüpheli Şahıs">👤 Şüpheli Şahıs</option>
+            {Object.keys(hazardEmojis).map(hazard => (
+              <option key={hazard} value={hazard}>{hazardEmojis[hazard]} {hazard}</option>
+            ))}
           </select>
           <textarea placeholder="Detaylı not..." value={note} onChange={(e) => setNote(e.target.value)} style={{ marginTop: '10px' }} />
           <label className="file-label"><Camera size={18} /> Fotoğraf Ekle<input type="file" onChange={(e) => setPhoto(e.target.files[0])} accept="image/*" hidden /></label>

@@ -75,10 +75,10 @@ const Chatbot = () => {
           bottom: '70px',
           right: '0',
           width: '350px',
-          backgroundColor: '#fff',
+          backgroundColor: 'var(--chatbot-bg)',
           borderRadius: '16px',
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-          border: '1px solid #e5e7eb',
+          border: '1px solid var(--border-light)',
           display: 'flex',
           flexDirection: 'column',
           height: '500px',
@@ -115,7 +115,7 @@ const Chatbot = () => {
             flex: 1,
             padding: '16px',
             overflowY: 'auto',
-            backgroundColor: '#f9fafb',
+            backgroundColor: 'var(--bg-panel)',
             display: 'flex',
             flexDirection: 'column',
             gap: '12px'
@@ -136,8 +136,8 @@ const Chatbot = () => {
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0,
-                  backgroundColor: msg.isBot ? '#dcfce7' : '#dbeafe',
-                  color: msg.isBot ? '#16a34a' : '#2563eb'
+                  backgroundColor: msg.isBot ? 'var(--chatbot-bot-icon-bg)' : '#dbeafe',
+                  color: msg.isBot ? 'var(--chatbot-bot-icon)' : '#2563eb'
                 }}>
                   {msg.isBot ? <Bot size={16} /> : <User size={16} />}
                 </div>
@@ -147,11 +147,11 @@ const Chatbot = () => {
                   fontSize: '14px',
                   lineHeight: '1.5',
                   boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-                  backgroundColor: msg.isBot ? '#ffffff' : '#22c55e',
-                  color: msg.isBot ? '#374151' : '#ffffff',
+                  backgroundColor: msg.isBot ? 'var(--chatbot-msg-bot)' : 'var(--chatbot-msg-user)',
+                  color: msg.isBot ? 'var(--chatbot-msg-bot-text)' : 'var(--chatbot-msg-user-text)',
                   borderTopLeftRadius: msg.isBot ? '0' : '16px',
                   borderTopRightRadius: msg.isBot ? '16px' : '0',
-                  border: msg.isBot ? '1px solid #f3f4f6' : 'none'
+                  border: msg.isBot ? '1px solid var(--border-light)' : 'none'
                 }}>
                   {msg.text.split('\n').map((line, i) => (
                     <span key={i}>
@@ -166,25 +166,25 @@ const Chatbot = () => {
             {/* Sıkça Sorulan Sorular (Sadece ilk mesajda göster) */}
             {messages.length === 1 && !isLoading && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px', paddingLeft: '40px' }}>
-                <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Sıkça Sorulan Sorular:</p>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 4px 0' }}>Sıkça Sorulan Sorular:</p>
                 {suggestedQuestions.map((q, i) => (
                   <button
                     key={i}
                     onClick={() => submitMessage(q)}
                     style={{
-                      backgroundColor: '#f3f4f6',
-                      border: '1px solid #e5e7eb',
+                      backgroundColor: 'var(--bg-input)',
+                      border: '1px solid var(--border-light)',
                       borderRadius: '12px',
                       padding: '8px 12px',
                       fontSize: '13px',
-                      color: '#374151',
+                      color: 'var(--text-primary)',
                       textAlign: 'left',
                       cursor: 'pointer',
                       transition: 'all 0.2s',
                       alignSelf: 'flex-start'
                     }}
-                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#dcfce7'; e.currentTarget.style.borderColor = '#22c55e'; e.currentTarget.style.color = '#16a34a'; }}
-                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = '#f3f4f6'; e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.color = '#374151'; }}
+                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--chatbot-bot-icon-bg)'; e.currentTarget.style.borderColor = 'var(--chatbot-bot-icon)'; e.currentTarget.style.color = 'var(--chatbot-bot-icon)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-input)'; e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
                   >
                     {q}
                   </button>
@@ -194,10 +194,10 @@ const Chatbot = () => {
 
             {isLoading && (
               <div style={{ display: 'flex', gap: '8px', maxWidth: '85%', alignSelf: 'flex-start' }}>
-                <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--chatbot-bot-icon-bg)', color: 'var(--chatbot-bot-icon)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Bot size={16} />
                 </div>
-                <div style={{ padding: '12px', backgroundColor: '#ffffff', borderRadius: '16px', borderTopLeftRadius: '0', display: 'flex', alignItems: 'center', gap: '8px', color: '#9ca3af', fontSize: '14px', border: '1px solid #f3f4f6' }}>
+                <div style={{ padding: '12px', backgroundColor: 'var(--chatbot-msg-bot)', borderRadius: '16px', borderTopLeftRadius: '0', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '14px', border: '1px solid var(--border-light)' }}>
                   <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Yazıyor...
                 </div>
               </div>
@@ -208,8 +208,8 @@ const Chatbot = () => {
           {/* Input Area */}
           <form onSubmit={handleSend} style={{
             padding: '12px',
-            backgroundColor: '#ffffff',
-            borderTop: '1px solid #f3f4f6',
+            backgroundColor: 'var(--chatbot-bg)',
+            borderTop: '1px solid var(--border-light)',
             display: 'flex',
             gap: '8px'
           }}>
@@ -220,7 +220,8 @@ const Chatbot = () => {
               placeholder="Bir soru sorun..."
               style={{
                 flex: 1,
-                backgroundColor: '#f3f4f6',
+                backgroundColor: 'var(--bg-input)',
+                color: 'var(--text-primary)',
                 border: '1px solid transparent',
                 borderRadius: '9999px',
                 padding: '8px 16px',
@@ -228,8 +229,8 @@ const Chatbot = () => {
                 outline: 'none',
                 transition: 'all 0.2s'
               }}
-              onFocus={(e) => { e.target.style.backgroundColor = '#ffffff'; e.target.style.borderColor = '#22c55e'; }}
-              onBlur={(e) => { e.target.style.backgroundColor = '#f3f4f6'; e.target.style.borderColor = 'transparent'; }}
+              onFocus={(e) => { e.target.style.backgroundColor = 'var(--bg-input-focus)'; e.target.style.borderColor = 'var(--border-focus)'; }}
+              onBlur={(e) => { e.target.style.backgroundColor = 'var(--bg-input)'; e.target.style.borderColor = 'transparent'; }}
             />
             <button
               type="submit"
@@ -257,6 +258,7 @@ const Chatbot = () => {
       {/* FAB Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
+        className="btn-chatbot"
         style={{
           width: '64px',
           height: '64px',

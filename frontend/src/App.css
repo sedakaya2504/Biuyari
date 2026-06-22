@@ -317,3 +317,84 @@ body, html, #root {
   0%, 80%, 100% { transform: scale(0); }
   40% { transform: scale(1); }
 }
+
+/* --- DARK MODE (GECE MODU) --- */
+:root {
+  --bg-modal: #ffffff;
+  --bg-panel: #f9fafb;
+  --bg-input: #ffffff;
+  --bg-input-focus: #ffffff;
+  --text-primary: #1f2937;
+  --text-secondary: #4b5563;
+  --text-muted: #6b7280;
+  --border-light: #e5e7eb;
+  --border-focus: #22c55e;
+  --profile-bg: #e0e7ff;
+  --profile-text: #3730a3;
+  --community-bg: #f0fdf4;
+  --community-border: #bcf0da;
+  --community-title: #166534;
+  --community-text: #15803d;
+  --chatbot-bg: #ffffff;
+  --chatbot-msg-bot: #ffffff;
+  --chatbot-msg-bot-text: #374151;
+  --chatbot-msg-user: #22c55e;
+  --chatbot-msg-user-text: #ffffff;
+  --chatbot-bot-icon-bg: #dcfce7;
+  --chatbot-bot-icon: #16a34a;
+}
+
+[data-theme='dark'] {
+  --bg-modal: #1e293b;
+  --bg-panel: #0f172a;
+  --bg-input: #334155;
+  --bg-input-focus: #1e293b;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --border-light: #334155;
+  --border-focus: #4ade80;
+  --profile-bg: #3730a3;
+  --profile-text: #e0e7ff;
+  --community-bg: #064e3b;
+  --community-border: #065f46;
+  --community-title: #a7f3d0;
+  --community-text: #d1fae5;
+  --chatbot-bg: #1e293b;
+  --chatbot-msg-bot: #334155;
+  --chatbot-msg-bot-text: #f8fafc;
+  --chatbot-msg-user: #16a34a;
+  --chatbot-msg-user-text: #ffffff;
+  --chatbot-bot-icon-bg: #064e3b;
+  --chatbot-bot-icon: #4ade80;
+}
+
+[data-theme='dark'] .app-container { background-color: #0f172a; color: #f8fafc; }
+[data-theme='dark'] .header, 
+[data-theme='dark'] .filter-bar,
+[data-theme='dark'] .report-form,
+[data-theme='dark'] .button-group-container { 
+  background-color: #1e293b; 
+  border-color: #334155; 
+  color: #f8fafc;
+}
+[data-theme='dark'] .header h1 { color: #f8fafc; }
+[data-theme='dark'] .btn-icon { background-color: #334155; color: #cbd5e1; border-color: #475569; }
+[data-theme='dark'] .btn-icon:hover { background-color: #475569; }
+[data-theme='dark'] .filter-bar button { color: #cbd5e1; }
+[data-theme='dark'] .filter-bar button.active { background-color: #334155; color: #f8fafc; }
+[data-theme='dark'] .report-form h3 { color: #f8fafc; }
+[data-theme='dark'] .report-form select, 
+[data-theme='dark'] .report-form textarea, 
+[data-theme='dark'] .report-form input { 
+  background-color: #0f172a; 
+  color: white; 
+  border-color: #334155; 
+}
+[data-theme='dark'] .leaflet-container { background: #0f172a; }
+[data-theme='dark'] .leaflet-layer,
+[data-theme='dark'] .leaflet-control-zoom-in,
+[data-theme='dark'] .leaflet-control-zoom-out,
+[data-theme='dark'] .leaflet-control-attribution {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}
