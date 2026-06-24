@@ -268,7 +268,7 @@ app.post('/api/reports/:id/vote', verifyToken, async (req, res) => {
         let scoreChange = 0;
         if (voteType === 'upvote') scoreChange = 2; // Doğrulanınca +2
         else if (voteType === 'downvote') scoreChange = -5; // Yalanlanırsa -5
-        
+
         if (prevVote === 'upvote' && voteType === 'downvote') scoreChange = -7;
         if (prevVote === 'downvote' && voteType === 'upvote') scoreChange = 7;
 

@@ -67,7 +67,7 @@ const Chatbot = () => {
   };
 
   return (
-    <div style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 9999, fontFamily: 'system-ui, sans-serif' }}>
+    <div className="chatbot-container" style={{ position: 'fixed', right: '24px', zIndex: 9999, fontFamily: 'system-ui, sans-serif' }}>
       {/* Sohbet Penceresi */}
       {isOpen && (
         <div style={{

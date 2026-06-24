@@ -289,18 +289,49 @@ body, html, #root {
 .animate-pulse { animation: danger-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
 @keyframes danger-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .7; } }
 
+.chatbot-container {
+  bottom: 24px;
+}
+
 /* MOBİL ÖZEL AYARLAR (Yazıları gizleyip ikonları tutma) */
 @media (max-width: 600px) {
+  .chatbot-container {
+    bottom: 95px !important;
+    right: 16px !important;
+  }
+
+  .header {
+    padding: 12px 14px;
+  }
+
   .header h1 {
-    font-size: 1.2rem;
+    font-size: 1.05rem;
   }
   
   .btn-icon, .btn-locate {
-    padding: 8px 12px;
+    padding: 8px 10px;
+  }
+
+  .header-buttons {
+    gap: 4px;
+    overflow-x: auto;
+    display: flex;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none;  /* IE and Edge */
+  }
+  .header-buttons::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
+  }
+  .header-buttons > * {
+    flex-shrink: 0;
   }
   
   .hide-on-mobile {
-    display: none;
+    display: none !important;
+  }
+
+  .show-on-mobile {
+    display: inline-block !important;
   }
 }
 

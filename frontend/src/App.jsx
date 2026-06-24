@@ -62,21 +62,21 @@ const ReportItem = ({ r, index, isHotspot, currentUser, BACKEND_URL, token }) =>
       const res = await fetch(`${BACKEND_URL}/api/reports/${r.id}/vote`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ voteType })
       });
-      if (!res.ok) { 
+      if (!res.ok) {
         const errText = await res.text();
-        alert(errText || "İşlem başarısız."); 
-        return; 
+        alert(errText || "İşlem başarısız.");
+        return;
       }
       const updatedReport = await res.json();
-      
+
       // DOĞRUDAN DOM GÜNCELLEMESİ (React-Leaflet Çökmesini Önlemek İçin)
       if (upRef.current) upRef.current.innerText = updatedReport.up_votes;
       if (downRef.current) downRef.current.innerText = updatedReport.down_votes;
-      
+
       // Obje referansını sessizce güncelle (Popup kapatılıp açılırsa yeni değer görünsün)
       r.up_votes = updatedReport.up_votes;
       r.down_votes = updatedReport.down_votes;
-      
+
     } catch (error) { alert("Sunucuya bağlanılamadı."); }
   };
 
@@ -260,6 +260,18 @@ function App() {
     }
   };
 
+  useEffect(() => {
+    if (currentUser && currentUser.phone_number && currentUser.username) {
+      const isTourDone = localStorage.getItem('BiUyariTourDone');
+      if (!isTourDone) {
+        const timer = setTimeout(() => {
+          setRunTour(true);
+        }, 1500); // UI render ve harita yüklemesi için kısa bir bekleme
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [currentUser]);
+
   const [profileOpen, setProfileOpen] = useState(false);
 
   // --- WHATSAPP BİLDİRİM STATE'LERİ EKLENDİ ---
@@ -436,7 +448,7 @@ function App() {
   // --- KAYIT FORMU GÜNCELLEMESİ (Omnichannel Validasyonları) ---
   const handleZoneSubmit = async (e) => {
     e.preventDefault();
-    if (!userPos) return alert("Lütfen önce 'Beni Bul'a basarak ahırınızın konumunu belirleyin!");
+    if (!userPos) return alert("Lütfen önce üst menüdeki Konum ikonuna basarak ahırınızın konumunu belirleyin!");
 
     if ((notificationPref === 'telegram' || notificationPref === 'both') && !telegramChatId) {
       return alert("Lütfen geçerli bir Telegram Chat ID girin.");
@@ -461,7 +473,7 @@ function App() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!userPos) return alert("Lütfen önce 'Beni Bul'a basın!");
+    if (!userPos) return alert("Lütfen önce üst menüdeki Konum ikonuna basın!");
 
     const formData = new FormData();
     formData.append('lat', userPos.lat);
@@ -591,7 +603,6 @@ function App() {
         if (res.ok) {
           const updatedUser = await res.json();
           setCurrentUser(updatedUser);
-          setRunTour(true);
           alert("Kayıt başarıyla tamamlandı!");
         } else {
           alert("Güncelleme başarısız oldu.");
@@ -642,18 +653,19 @@ function App() {
         <div className="header-buttons">
           {currentUser && (
             <button onClick={() => setProfileOpen(true)} className="btn-profile" style={{ background: 'transparent', border: 'none', cursor: 'pointer', marginRight: '5px', padding: '5px 10px', borderRadius: '15px', backgroundColor: currentUser.role === 'admin' ? '#fef08a' : '#e0e7ff', color: currentUser.role === 'admin' ? '#854d0e' : '#3730a3', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
-              {currentUser.role === 'admin' ? `👑 ${currentUser.username || 'Yönetici'}` : `👤 ${currentUser.username || 'Kullanıcı'}`}
+              {currentUser.role === 'admin' ? <>👑 <span className="hide-on-mobile">{currentUser.username || 'Yönetici'}</span></> : <>👤 <span className="hide-on-mobile">{currentUser.username || 'Kullanıcı'}</span></>}
             </button>
           )}
           {currentUser && currentUser.role === 'admin' && (
             <button onClick={() => { setAdminPanelOpen(true); setSettingsOpen(false); setFormOpen(false); }} className="btn-icon" style={{ backgroundColor: '#fef08a', color: '#854d0e', border: 'none', marginLeft: '5px', fontWeight: 'bold' }}>
-              Dosya İşlemleri
+              <span className="hide-on-mobile">Dosya İşlemleri</span>
+              <span className="show-on-mobile" style={{ display: 'none' }}>📁</span>
             </button>
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             <button onClick={() => setShowHeatmap(!showHeatmap)} className={`btn-icon ${showHeatmap ? 'active' : ''}`}>
-              <Flame size={18} /> Isı Haritası
+              <Flame size={18} /> <span className="hide-on-mobile">Isı Haritası</span>
             </button>
             {showHeatmap && (
               <select
@@ -672,7 +684,7 @@ function App() {
           </div>
 
           <button onClick={locateUser} className="btn-locate">
-            <MapPin size={18} /> Beni Bul
+            <MapPin size={18} /> <span className="hide-on-mobile">Beni Bul</span>
           </button>
           <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className="btn-icon btn-theme">
             {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
@@ -687,15 +699,15 @@ function App() {
       </header>
 
       {/* MODERN VE GRUPLANMIŞ ZAMAN FİLTRESİ (UX DÜZELTİLDİ) */}
-      <div className="filter-bar" style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap', padding: '12px 16px', backgroundColor: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
+      <div className="filter-bar" style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'nowrap', padding: '12px 16px', backgroundColor: '#ffffff', borderBottom: '1px solid #e2e8f0', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#4b5563' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#4b5563', flexShrink: 0 }}>
           <Clock size={18} />
           <span style={{ fontSize: '14px', fontWeight: '600' }}>Zaman Filtresi:</span>
         </div>
 
         {/* Tüm kontrolleri tutan gri hap (pill) kapsayıcı */}
-        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#f1f5f9', padding: '4px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#f1f5f9', padding: '4px', borderRadius: '10px', border: '1px solid #e2e8f0', flexShrink: 0 }}>
 
           <button
             className={filterAll ? 'active' : ''}
@@ -775,14 +787,14 @@ function App() {
 
                 <div style={{ maxHeight: '220px', overflowY: 'auto', paddingRight: '5px' }}>
                   {hotspot.reports.map((r, index) => (
-                    <ReportItem 
-                      key={r.id || index} 
-                      r={r} 
-                      index={index} 
-                      isHotspot={hotspot.reports.length > 1} 
-                      currentUser={currentUser} 
-                      BACKEND_URL={BACKEND_URL} 
-                      token={token} 
+                    <ReportItem
+                      key={r.id || index}
+                      r={r}
+                      index={index}
+                      isHotspot={hotspot.reports.length > 1}
+                      currentUser={currentUser}
+                      BACKEND_URL={BACKEND_URL}
+                      token={token}
                     />
                   ))}
                 </div>
@@ -798,11 +810,11 @@ function App() {
 
       {!formOpen && !settingsOpen && !userPos && (
         <div className="map-hint" style={{ backgroundColor: '#ef4444' }}>
-          📍 İşlem yapabilmek için önce 'Beni Bul'a basın
+          📍 İşlem yapabilmek için önce üst menüdeki Konum butonuna basın
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '10px', padding: '0 15px 15px 15px', maxWidth: '800px', margin: '0 auto' }}>
+      <div className="button-group-container">
         <button
           className="btn-add-report"
           style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
@@ -827,7 +839,7 @@ function App() {
               <h2 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-primary)' }}>{currentUser.full_name || currentUser.username}</h2>
               <p style={{ margin: '5px 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>{currentUser.role === 'admin' ? 'Yönetici Yetkisi' : 'Standart Kullanıcı'}</p>
             </div>
-            
+
             <div style={{ backgroundColor: 'var(--bg-panel)', padding: '15px', borderRadius: '12px', marginBottom: '20px' }}>
               <h4 style={{ margin: '0 0 10px', color: 'var(--text-secondary)', fontSize: '14px' }}>İletişim Bilgileri</h4>
               <p style={{ margin: '5px 0', fontSize: '13px', color: 'var(--text-primary)' }}><strong>Telefon:</strong> {currentUser.phone_number || 'Belirtilmemiş'}</p>
@@ -837,7 +849,7 @@ function App() {
             <div style={{ backgroundColor: 'var(--community-bg)', border: '1px solid var(--community-border)', padding: '15px', borderRadius: '12px', marginBottom: '20px', textAlign: 'center' }}>
               <h4 style={{ margin: '0 0 5px', color: 'var(--community-title)', fontSize: '14px' }}>Topluluk Katkısı</h4>
               <p style={{ margin: 0, fontSize: '13px', color: 'var(--community-text)' }}>Yaptığınız bildirimlerle sistemi daha güvenli hale getiriyorsunuz!</p>
-              
+
               {/* LİDERLİK TABLOSU */}
               <div style={{ marginTop: '15px', textAlign: 'left', backgroundColor: 'var(--bg-modal)', borderRadius: '8px', padding: '10px' }}>
                 <h4 style={{ margin: '0 0 10px', fontSize: '14px', color: 'var(--text-primary)', borderBottom: '1px solid var(--border-light)', paddingBottom: '5px' }}>🏆 Topluluk Liderleri</h4>
