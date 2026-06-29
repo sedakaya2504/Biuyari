@@ -2,14 +2,14 @@
 
 Bi-Uyarı, çobanlar ve sürü sahipleri için geliştirilmiş tam kapsamlı bir erken uyarı ve radar sistemidir. Yırtıcı hayvan saldırıları, başıboş sürüler, enfekte hayvanlar ve şüpheli şahıslar gibi tehlikeleri anında bildirerek önlem alınmasını sağlar.
 
-## 🚀 Özellikler
+##  Özellikler
 
 - **Canlı Harita (PostGIS):** Çevrenizdeki tehlikeleri harita üzerinde ısı haritası ve nokta atışı olarak görebilirsiniz.
 - **Akıllı Radar Sistemi:** Kendi ahır konumunuzu ve radar menzilinizi (Örn: 5 KM) belirleyebilirsiniz. Bu menzile bir tehlike girdiğinde anında bildirim alırsınız.
 - **Çok Kanallı Bildirim:** Tehlike anında Telegram, WhatsApp ve E-posta (Gmail) üzerinden eşzamanlı uyarılar alırsınız.
 - **Kullanıcı Doğrulama:** Google OAuth entegrasyonu ile güvenli giriş. Asılsız ihbarları engellemek için güven skoru ve ihbar oylama sistemi.
 
-## 🛠️ Kurulum
+##  Kurulum
 
 Projeyi kendi bilgisayarınızda çalıştırmak için aşağıdaki adımları takip edin:
 
@@ -55,7 +55,7 @@ GEMINI_API_KEY=sizin_gemini_api_anahtariniz
 VITE_BACKEND_URL=http://localhost:3000
 ```
 
-### 🔑 Çevre Değişkenleri (.env) Nasıl Alınır?
+###  Çevre Değişkenleri (.env) Nasıl Alınır?
 
 Bu projeyi tam özellikli çalıştırabilmek için aşağıdaki servislerden API anahtarları almanız gerekmektedir:
 
